@@ -1,0 +1,16 @@
+# core
+numpy
+pandas
+scikit-learn
+nibabel
+scipy
+pillow
+
+# if using PyTorch for DL features
+# torch
+
+# CLI
+click
+
+# testing (optional)
+pytest

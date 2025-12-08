@@ -1,0 +1,42 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author YourName
+    Version 0.1
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential git wget ca-certificates python3 python3-pip python3-dev \
+        libglib2.0-0 libxext6 libsm6 libxrender1
+
+    # upgrade pip
+    python3 -m pip install --upgrade pip
+
+    # install python packages
+    pip3 install numpy pandas scikit-learn nibabel scipy click
+
+    # If using PyTorch uncomment and adjust (CPU wheel example)
+    # pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    # Install PELICAN — adapt to pelican install commands
+    # If PELICAN is available via pip or git, install it here.
+    # Example (pseudo):
+    # pip3 install pelican-cli
+    # or clone and install
+    # git clone https://github.com/your-org/pelican.git /opt/pelican
+    # cd /opt/pelican && pip3 install -e .
+
+    # Copy repo into container
+    mkdir -p /opt/als_sustain
+
+%files
+    . /opt/als_sustain
+
+%environment
+    export PYTHONPATH=/opt/als_sustain:$PYTHONPATH
+    export PATH=/usr/local/bin:$PATH
+
+%runscript
+    # default run: execute the CLI with args forwarded
+    exec python3 -m als_sustain.cli.als_sustain_cli "$@"
