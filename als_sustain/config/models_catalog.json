@@ -1,6 +1,6 @@
 {
   "models": [
-    "dbm_model",
+    "preselected_region_dbm_model",
     "dl_model"
   ]
 }

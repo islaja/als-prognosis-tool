@@ -1,0 +1,16 @@
+[
+  "dbm_cerebra_w_precentral",
+  "dbm_cerebra_w_paracentral",
+  "dbm_jhu50_w_corticospinal_tract",
+  "dbm_cerebra_w_brainstem",
+  "dbm_cerebra_w_superiorfrontal",
+  "dbm_cerebra_w_rostralmiddlefrontal",
+  "dbm_cerebra_w_superiorparietal",
+  "dbm_cerebra_w_inferiorparietal",
+  "dbm_cerebra_w_caudate",
+  "dbm_cerebra_w_putamen",
+  "dbm_cerebra_w_amygdala",
+  "dbm_cerebra_w_hippocampus",
+  "dbm_cerebra_w_entorhinal",
+  "dbm_cerebra_w_parahippocampal"
+]

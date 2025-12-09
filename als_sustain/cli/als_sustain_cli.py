@@ -1,7 +1,7 @@
 """Command line front-end for the package.
 Usage examples:
   # feature-based quick mode (features CSV paths)
-  python -m als_sustain.cli.als_sustain_cli run --model dbm_model --input Participant_Inputs_File_features.csv --workdir /tmp/out
+  python -m als_sustain.cli.als_sustain_cli run --model preselected_regions_DBM_model --input Participant_Inputs_File_features.csv --workdir /tmp/out
 
   # full pipeline mode (T1 paths)
   python -m als_sustain.cli.als_sustain_cli run --model dbm_model --input Participant_Inputs_File_t1.csv --workdir /tmp/out --singularity-bind /data
