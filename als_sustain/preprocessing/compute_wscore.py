@@ -7,4 +7,4 @@ def compute_wscores(features, wscore_hc_model = None):
         raise ValueError('wscore hc model must be provided to compute wscores.')
     else:
         #arr_scaled = scaler.transform(arr)
-        #return arr_scaled
+        return None

@@ -98,16 +98,22 @@ def normalize_step(context: Dict) -> Dict:
     return context
 
 def predict_step(context: Dict) -> Dict:
+    # TODO add prediction for survival model
     """Load model and predict using the normalized array in context (lazy import)."""
     desc = context["desc"]
     base_dir = context["base_dir"]
     model_file = os.path.join(base_dir, desc["model_file"])
-    from als_sustain.inference.predict import load_model, predict_with_model
+    # replace extension to put .pickle instead
+    # get model_file extension
+    model_file_ext = os.path.splitext(model_file)[1]
+    pickle_file = model_file.replace(model_file_ext, '.pickle')
+    from als_sustain.inference.predict import load_model, load_pickle_info, predict_with_model
     model = load_model(model_file)
+    samples_sequence, samples_f = load_pickle_info(pickle_file)
     arr = context.get("arr")
     if arr is None:
         raise ValueError("No feature array available for prediction")
-    prediction = predict_with_model(model, arr)
+    prediction = predict_with_model(model, samples_sequence, samples_f, arr)
     context["prediction"] = prediction
     return context
 
@@ -123,7 +129,8 @@ def build_steps_from_descriptor(desc: Dict):
     if preprocessing.get("requires_roi_extraction"):
         steps.append(compute_roi_means_step)
     if preprocessing.get("requires_dl_feature_extraction"):
-        steps.append(extract_dl_features_step)
+        #steps.append(extract_dl_features_step)
+        logger.debug("Model requests feature_extraction but this step isn't completely implemented.")
     if preprocessing.get("requires_wscore_normalization"):
         # placeholder: implement wscore step if available
         logger.debug("Model requests wscore normalization but no step is implemented.")
@@ -171,8 +178,8 @@ def run_for_row(row: Dict, model_id: str, workdir: str, base_dir: str = ".") -> 
         "ID": row["ID"],
         "Visit": row["Visit"],
         "model_id": model_id,
-        "prediction": context.get("prediction"),
         "features_used": context.get("features_used"),
+        "prediction": context.get("prediction"),
     }
     return result
 
