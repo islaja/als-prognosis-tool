@@ -11,6 +11,8 @@ When built into the container, provide an entrypoint that maps to the main() bel
 import argparse
 import os
 from als_sustain.pipeline.run_pipeline import run_batch
+from als_sustain.utils.io import make_json_safe
+
 
 def main():
     parser = argparse.ArgumentParser(description='ALS SuStaIn multi-model CLI')
@@ -28,9 +30,10 @@ def main():
     if args.command == 'run':
         os.makedirs(args.workdir, exist_ok=True)
         results = run_batch(args.input, args.model, args.workdir, base_dir=args.base_dir)
-        # print results in a human friendly format
+        # make JSON-safe before printing
+        results_safe = make_json_safe(results)
         import json
-        print(json.dumps(results, indent=2))
+        print(json.dumps(results_safe, indent=2))
 
 if __name__ == '__main__':
     main()
