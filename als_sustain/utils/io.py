@@ -1,21 +1,18 @@
-import csv
-from typing import List, Dict
+import pandas as pd
+import numpy as np
 
-def read_participant_inputs(path: str) -> List[Dict]:
-    """Read a Participant_Inputs_File.csv with columns:
-    ParticipantID,ParticipantVisit,Path
-
-    Returns a list of dicts.
-    """
-    rows = []
-    with open(path, 'r', newline='') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            # ensure keys are exactly ParticipantID, ParticipantVisit, Path
-            normalized = {
-                'ParticipantID': r.get('ParticipantID') or r.get('participantid') or r.get('participant_id'),
-                'ParticipantVisit': r.get('ParticipantVisit') or r.get('participantvisit') or r.get('visit'),
-                'Path': r.get('Path') or r.get('path') or r.get('PathToT1w') or r.get('PathToFeatureCSV')
-            }
-            rows.append(normalized)
-    return rows
+def make_json_safe(o):
+    if isinstance(o, pd.Series):
+        #return o.tolist()
+        return o.to_dict()
+    if isinstance(o, pd.DataFrame):
+        return o.to_dict(orient="records")
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    if isinstance(o, (np.float32, np.float64, np.int64, np.int32)):
+        return o.item()
+    if isinstance(o, dict):
+        return {k: make_json_safe(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [make_json_safe(x) for x in o]
+    return o
