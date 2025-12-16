@@ -46,6 +46,14 @@ def run_pelican_step(context: Dict) -> Dict:
 def compute_roi_means_step(context: Dict) -> Dict:
     """Compute ROI means from a .nii file using the model's atlas (lazy import)."""
     input_path = context["input_path"]
+    if input_path.endswith('.mnc'):
+        # convert to nii first
+        from als_sustain.utils.image import minc2nii
+        nii_path = os.path.splitext(input_path)[0] + '.nii'
+        minc2nii(input_path, nii_path)
+        context["input_path"] = nii_path
+        input_path = nii_path
+    #exit()
     if input_path.endswith(('.nii', '.nii.gz')):
         desc = context["desc"]
         base_dir = context["base_dir"]
