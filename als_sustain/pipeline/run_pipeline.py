@@ -4,18 +4,43 @@ pipeline so preprocessing steps are composable and testable. Imports that may
 require large optional dependencies (nibabel, sklearn, etc.) are done lazily
 inside the step functions to keep import-time lightweight for tests.
 """
-import json
-import os
+import yaml
 import logging
 import pandas as pd
 from typing import Dict
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-def load_descriptor(model_id: str, base_dir: str) -> Dict:
-    path = os.path.join(base_dir, "als_sustain", "models", f"{model_id}.json")
-    with open(path, "r") as f:
-        desc = json.load(f)
+
+def load_descriptor(*, model_id: str, base_dir: Path) -> Dict:
+    """
+    Load a model descriptor YAML file.
+
+    Parameters
+    ----------
+    model_id : str
+        Model identifier (filename without .yaml)
+    base_dir : Path
+        Project root directory (container-safe)
+
+    Returns
+    -------
+    Dict
+        Parsed model descriptor
+    """
+    path = base_dir / "config" / "models" / f"{model_id}.yaml"
+    path = path.resolve()
+
+    if not path.exists():
+        raise FileNotFoundError(f"Model descriptor not found: {path}")
+
+    with path.open() as f:
+        desc = yaml.safe_load(f)
+
+    if not isinstance(desc, dict):
+        raise ValueError(f"Invalid model descriptor format: {path}")
+
     return desc
 
 # --- Step implementations ----------------------------------------------------
@@ -28,8 +53,9 @@ def ensure_subject_outdir_step(context: Dict) -> Dict:
     workdir = context["workdir"]
     pid = row["ID"]
     visit = row["Visit"]
-    subject_outdir = os.path.join(workdir, f"{pid}_{visit}")
-    os.makedirs(subject_outdir, exist_ok=True)
+    subject_outdir = Path(workdir) / f"{pid}_{visit}"
+    subject_outdir.mkdir(parents=True, exist_ok=True)
+
     context["subject_outdir"] = subject_outdir
     return context
 
@@ -45,26 +71,23 @@ def run_pelican_step(context: Dict) -> Dict:
 
 def compute_roi_means_step(context: Dict) -> Dict:
     """Compute ROI means from a .nii file using the model's atlas (lazy import)."""
-    input_path = context["input_path"]
-    if input_path.endswith('.mnc'):
+    input_path = Path(context["input_path"])
+    if input_path.suffix == '.mnc':
         # convert to nii first
         from als_sustain.utils.image import minc2nii
-        nii_path = os.path.splitext(input_path)[0] + '.nii'
+        nii_path = Path(input_path).with_suffix('.nii')
         minc2nii(input_path, nii_path)
         context["input_path"] = nii_path
         input_path = nii_path
     #exit()
-    if input_path.endswith(('.nii', '.nii.gz')):
-        desc = context["desc"]
-        base_dir = context["base_dir"]
-        preprocessing = desc.get("preprocessing", {})
-        atlas = preprocessing.get("atlas_path")
+    if input_path.suffix in (('.nii', '.nii.gz')):
+        
         if atlas is None:
             raise ValueError("Model descriptor requires atlas_path for ROI extraction")
         # lazy import
         from als_sustain.preprocessing.extract_roi_means import compute_roi_means
-        atlas_path = os.path.join(base_dir, atlas)
-        roi_vals = compute_roi_means(context["input_path"], atlas_path)
+
+        roi_vals = compute_roi_means(context)
         context["features"] = pd.Series(roi_vals)
     return context
 
@@ -143,16 +166,21 @@ def predict_step(context: Dict) -> Dict:
     from als_sustain.inference.predict import load_model, load_pickle_info, predict_with_model
 
     desc = context["desc"]
-    base_dir = context["base_dir"]
-    model_file = os.path.join(base_dir, desc["model_file"])
+    base_dir = Path(context["base_dir"])
+    
+    model_file = base_dir / Path(desc["model_file"])
+    model_file = model_file.resolve()
     model = load_model(model_file)
-    meta_file = os.path.join(base_dir, desc["meta_file"])
+    
+    meta_file = base_dir / Path(desc["meta_file"])
+    meta_file = meta_file.resolve()
     samples_sequence, samples_f = load_pickle_info(meta_file)
+
     data = context.get("features")
     if data is None:
         raise ValueError("No data available for prediction")
     prediction = predict_with_model(model, samples_sequence, samples_f, data)
-    context["prediction"] = prediction
+    context["prediction"] = prediction.to_dict()
     return context
 
 # --- Orchestration ----------------------------------------------------------
@@ -180,12 +208,20 @@ def build_steps_from_descriptor(desc: Dict):
     steps.append(predict_step)
     return steps
 
-def run_for_row(row: Dict, model_id: str, workdir: str, base_dir: str = ".") -> Dict:
+def run_for_row(
+        *,
+        row: Dict,
+        model_id: str,
+        workdir: Path,
+        resources: Dict,
+        base_dir: Path,
+    ) -> Dict:
+    
     """Process a single CSV row. `row` has keys: ID,Visit,Path
     The Path can be either T1 or a features CSV depending on model descriptor.
     """
 
-    desc = load_descriptor(model_id, base_dir)
+    desc = load_descriptor(model_id=model_id, base_dir=base_dir)
     input_path = row["Path"].strip()
 
 
@@ -197,6 +233,7 @@ def run_for_row(row: Dict, model_id: str, workdir: str, base_dir: str = ".") -> 
         "desc": desc,
         "input_path": input_path,
         "features": pd.Series(),
+        "resources": resources, 
     } 
 
     if input_path.endswith('.csv'):
@@ -220,10 +257,24 @@ def run_for_row(row: Dict, model_id: str, workdir: str, base_dir: str = ".") -> 
     }
     return result
 
-def run_batch(input_csv: str, model_id: str, workdir: str, base_dir: str = "."):
+def run_batch(
+        *, 
+        input_csv: str, 
+        model_id: str, 
+        workdir: Path, 
+        resources: Dict, 
+        base_dir: Path,
+    ) -> Dict:
+    
     df = pd.read_csv(input_csv)
     results = []
     for _, row in df.iterrows():
-        r = run_for_row(row.to_dict(), model_id, workdir, base_dir)
+        r = run_for_row(
+            row=row.to_dict(), 
+            model_id=model_id, 
+            workdir=workdir, 
+            resources=resources, 
+            base_dir=base_dir
+            )
         results.append(r)
     return results

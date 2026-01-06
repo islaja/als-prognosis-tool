@@ -6,19 +6,18 @@ Adapt to your SuStaIn implementation.
 import pickle
 import numpy as np
 import pandas as pd
-from typing import Tuple, Dict
 from pathlib import Path
 import joblib
 
-def load_model(model_path: str):
-    with open(model_path, "rb") as f:
-        if model_path.endswith('.pkl') or model_path.endswith('.pickle'):
+def load_model(model_path: Path):
+    with model_path.open("rb") as f:
+        if model_path.suffix == '.pkl' or model_path.suffix == '.pickle':
             obj = pickle.load(f)
         else:
             obj = joblib.load(f)
     return obj
 
-def load_pickle_info(pickle_path: str):
+def load_pickle_info(pickle_path: Path):
     try:
         pk = pd.read_pickle(pickle_path)
         samples_sequence = pk["samples_sequence"]
@@ -55,35 +54,34 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
                                                                     N_samples)
 
 
-    output_data['inf_subtype'] = ml_subtype
-    output_data['inf_subtype_prob'] = prob_ml_subtype
-    output_data['inf_stage'] = ml_stage
-    output_data['inf_stage_prob'] = prob_ml_stage
-    print("AJFJAAJA")
-    print(ml_stage)
+    output_data['ml_subtype'] = ml_subtype
+    output_data['prob_ml_subtype'] = prob_ml_subtype
+    output_data['ml_stage'] = ml_stage
+    output_data['prob_ml_stage'] = prob_ml_stage
+
     # make current subtypes (0, 1, 2) 1 and 2, 3 instead
     #output_data.loc[:, ml_subtype_col] = (output_data[ml_subtype_col].to_numpy() + 1).astype('Int64')
-    output_data['inf_subtype'] = (output_data['inf_subtype'].astype("Int64") + 1)
+    output_data['ml_subtype'] = (output_data['ml_subtype'].astype("Int64") + 1)
 
     # Define a mask for stage 0
-    stage0_mask = output_data['inf_stage'] == 0
+    stage0_mask = output_data['ml_stage'] == 0
     # Assign subtype = 0 for stage 0 (meaning: no valid subtype)
-    output_data.loc[stage0_mask, 'inf_subtype'] = 0
+    output_data.loc[stage0_mask, 'ml_subtype'] = 0
 
     # set stage as int
-    output_data['inf_stage'] =  output_data['inf_stage'].astype('Int64')
+    output_data['ml_stage'] =  output_data['ml_stage'].astype('Int64')
 
     # set ml_subtype as categorical
-    col_values = output_data['inf_subtype']
+    col_values = output_data['ml_subtype']
     categories = sorted(pd.Series(col_values.dropna().unique()))
-    output_data['inf_subtype'] = pd.Categorical(
+    output_data['ml_subtype'] = pd.Categorical(
                 col_values,
                 categories=categories,
                 ordered=False
             )
 
     # Invalidate subtype probability for stage 0
-    output_data.loc[stage0_mask, 'inf_subtype_prob'] = 0.0
+    output_data.loc[stage0_mask, 'prob_ml_subtype'] = 0.0
     
     # let's also add the probability for each subject of being each subtype
     for i in range(prob_subtype.shape[1]):
