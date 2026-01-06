@@ -252,7 +252,7 @@ def run_for_row(
         "ID": row["ID"],
         "Visit": row["Visit"],
         "model_id": model_id,
-        "features_used": context.get("features_used"),
+        "features_used": context.get("features").index.tolist(),
         "prediction": context.get("prediction"),
     }
     return result

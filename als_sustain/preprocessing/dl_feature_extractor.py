@@ -3,8 +3,9 @@ Implement actual model loading (torch) and forward pass to produce per-region em
 """
 from typing import Dict
 import numpy as np
+import pandas as pd
 
-def extract_dl_features(t1_path: str, dl_model_path: str) -> Dict[str, float]:
+def extract_dl_features(t1_path: str, dl_model_path: str) -> pd.Series:
     """Load DL model and extract features for this T1 volume.
 
     Return a dict mapping feature_name -> value
@@ -13,4 +14,4 @@ def extract_dl_features(t1_path: str, dl_model_path: str) -> Dict[str, float]:
     # Example: load pretrained PyTorch model, preprocess T1, forward pass
 
     fake_features = {f"feat_{i}": float(i) for i in range(1, 11)}
-    return fake_features
+    return pd.Series(fake_features)
