@@ -93,5 +93,5 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
     # remove fake row 
     output_data = pd.Series(output_data.iloc[0])
     print(output_data)
-    
+   
     return output_data

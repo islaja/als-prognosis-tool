@@ -42,17 +42,20 @@ def main():
 
     subparsers = parser.add_subparsers(dest='command')
 
-    run_parser = subparsers.add_parser('run', help='Run model on inputs CSV')
+    run_parser = subparsers.add_parser('run', help='Run model on batch CSV')
     run_parser.add_argument('--model', required=True, help='Model ID (descriptor filename without .yaml)')
-    run_parser.add_argument('--input', required=True, help='Participant_Inputs_File.csv')
-    run_parser.add_argument('--workdir', default='./workdir', help='Output working directory')
-    run_parser.add_argument('--base-dir', default='.', help='Base repo dir (where models/config live)')
+    run_parser.add_argument('--input', required=True, help='Path to Participant_Inputs.csv (ID, Visit, Path)')
+    run_parser.add_argument('--input_type', required=True, 
+                            choices=["t1_nifti", "dbm_maps_nifti", "regional_dbm", "regional_w_scores"],
+                            help='Type of data pointed to by the "Path" column')
+    run_parser.add_argument('--workdir', default='./workdir', help='Output directory')
+    run_parser.add_argument('--base-dir', default='.', help='Project base directory')
 
     args = parser.parse_args()
 
     if args.command == 'run':
         base_dir = Path(args.base_dir).resolve()
-        workdir = (base_dir / Path(args.workdir)).resolve()
+        workdir = Path(args.workdir).resolve()
         workdir.mkdir(parents=True, exist_ok=True)
         resources = load_resources(base_dir)
 

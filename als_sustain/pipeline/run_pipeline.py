@@ -172,7 +172,7 @@ def predict_step(context: Dict) -> Dict:
     model_file = model_file.resolve()
     model = load_model(model_file)
     
-    meta_file = base_dir / Path(desc["meta_file"])
+    meta_file = base_dir / Path(desc["model_meta_file"])
     meta_file = meta_file.resolve()
     samples_sequence, samples_f = load_pickle_info(meta_file)
 
