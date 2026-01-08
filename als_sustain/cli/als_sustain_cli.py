@@ -18,7 +18,7 @@ Usage examples:
 When built into the container, provide an entrypoint that maps to the main() below.
 """
 import argparse
-from als_sustain.pipeline.run_pipeline import run_batch
+from als_sustain.pipeline.run_pipeline import run_batch, load_descriptor
 from als_sustain.utils.io import make_json_safe
 from pathlib import Path
 import yaml
@@ -45,8 +45,7 @@ def main():
     run_parser = subparsers.add_parser('run', help='Run model on batch CSV')
     run_parser.add_argument('--model', required=True, help='Model ID (descriptor filename without .yaml)')
     run_parser.add_argument('--input', required=True, help='Path to Participant_Inputs.csv (ID, Visit, Path)')
-    run_parser.add_argument('--input_type', required=True, 
-                            choices=["t1_nifti", "dbm_maps_nifti", "regional_dbm", "regional_w_scores"],
+    run_parser.add_argument('--input_type', required=True,
                             help='Type of data pointed to by the "Path" column')
     run_parser.add_argument('--workdir', default='./workdir', help='Output directory')
     run_parser.add_argument('--base-dir', default='.', help='Project base directory')
@@ -62,13 +61,21 @@ def main():
         if not isinstance(resources, dict):
           raise RuntimeError("Failed to load resources config")
        
+        # Validate --input_type against the model descriptor
+        desc = load_descriptor(model_id=args.model, base_dir=base_dir)
+        accepted = desc.get("processing_input_accepted", [])
+        if args.input_type not in accepted:
+            raise ValueError(f"input_type {args.input_type} not accepted, expected one of: {accepted}")
+
         results = run_batch(
-            input_csv=args.input, 
-            model_id=args.model, 
-            workdir=workdir, 
+            input_csv=args.input,
+            input_type=args.input_type,
+            model_id=args.model,
+            workdir=workdir,
             resources=resources,
             base_dir=base_dir,
-            )
+        )
+
         print('--- Summary ---')
         print(yaml.safe_dump(results, sort_keys=False))
         results_df = pd.json_normalize(results, sep=".")

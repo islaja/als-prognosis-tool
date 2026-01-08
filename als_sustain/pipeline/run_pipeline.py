@@ -53,126 +53,39 @@ def ensure_subject_outdir_step(context: Dict) -> Dict:
     workdir = context["workdir"]
     pid = row["ID"]
     visit = row["Visit"]
-    subject_outdir = Path(workdir) / f"{pid}_{visit}"
+    subject_outdir = Path(workdir) / f"{pid}_{visit}".replace(" ", "_")
     subject_outdir.mkdir(parents=True, exist_ok=True)
 
     context["subject_outdir"] = subject_outdir
-    return context
-
-def run_pelican_step(context: Dict) -> Dict:
-    """Run PELICAN on a T1 input to produce a DBM path (lazy import)."""
-    input_path = context["input_path"]
-    subject_outdir = context["subject_outdir"]
-    # lazy import to avoid heavy dependencies at module import time
-    from als_sustain.preprocessing.pelican_runner import run_pelican
-    dbm_path = run_pelican(input_path, subject_outdir)
-    context["input_path"] = dbm_path
-    return context
-
-def compute_roi_means_step(context: Dict) -> Dict:
-    """Compute ROI means from a .nii file using the model's atlas (lazy import)."""
-    input_path = Path(context["input_path"])
-    if input_path.suffix == '.mnc':
-        # convert to nii first
-        from als_sustain.utils.image import minc2nii
-        nii_path = Path(input_path).with_suffix('.nii')
-        minc2nii(input_path, nii_path)
-        context["input_path"] = nii_path
-        input_path = nii_path
-    #exit()
-    if input_path.suffix in (('.nii', '.nii.gz')):
-        
-        if atlas is None:
-            raise ValueError("Model descriptor requires atlas_path for ROI extraction")
-        # lazy import
-        from als_sustain.preprocessing.extract_roi_means import compute_roi_means
-
-        roi_vals = compute_roi_means(context)
-        context["features"] = pd.Series(roi_vals)
-    return context
-
-def extract_dl_features_step(context: Dict) -> Dict:
-    """Extract deep features from a brain maps if requested."""
-    from als_sustain.preprocessing.dl_feature_extractor import extract_dl_features
-    input_path = context["input_path"]
-    if input_path.endswith(('.nii', '.nii.gz')):
-        desc = context["desc"]
-        preprocessing = desc.get("preprocessing", {})
-        dl_model_path = preprocessing.get("dl_model_path")
-        dl_feats = extract_dl_features(input_path, dl_model_path)
-        context["features"] = pd.Series(dl_feats)
-    return context
-
-def extract_selected_features(context: Dict) -> Dict:
-    """Extract only the features requested by the model descriptor."""
-
-    input_path = context["input_path"]
-    data = context.get("features")
-    # get information from input csv if no features in context yet
-    if data is None:
-        raise ValueError("No features available to select from")
-        
-    desc = context["desc"]     
-    preprocessing = desc.get("preprocessing", {})
-    feature_selected = preprocessing.get("features_selected", [])
-    model_id = context["model_id"]
-
-    has_features = [f in data.index for f in feature_selected]
-    if has_features == [True]*len(feature_selected):
-        context["features"] = data[feature_selected]
-        logger.debug(f"Loaded features {feature_selected} for model {model_id}")
-    else:
-        raise ValueError(f"Data does not contain all required selected features {feature_selected} for model {model_id}")
-
-    return context
-
-def sign_correction_step(context: Dict) -> Dict:
-    """Invert sign of certain/all features (such as in w-scores) so larger == more abnormal.
-    Controlled by descriptor keys under 'preprocessing':
-      - 'invert_all_features': bool
-      - 'invert_specific_features_list': list of feature names
-    """
-    desc = context["desc"]
-    preprocessing = desc.get("preprocessing", {})
-    features = context.get("features", pd.Series(dtype=float))
-
-    invert_all = preprocessing.get("invert_all_features", False)
-    invert_list = preprocessing.get("invert_specific_features_list", None)
-
-    # Decide which indices to invert
-    if invert_all:
-        to_invert = features.index.tolist()
-    elif invert_list:
-        # only invert names present in features
-        to_invert = [f for f in invert_list if f in features.index]
-    else:
-        raise ValueError("No list of features to invert provided.")
-
-    if not to_invert:
-        # nothing to do
-        context["features"] = features
-        return context
-
-    # Invert sign for selected names, preserve NaNs and dtype
-    for name in to_invert:
-        features.loc[name] = -1 * features.loc[name]
-        
-    context["features"] = features
     return context
 
 def predict_step(context: Dict) -> Dict:
     # TODO add prediction for survival model
     """Load model and predict using the normalized array in context (lazy import)."""
     from als_sustain.inference.predict import load_model, load_pickle_info, predict_with_model
-
-    desc = context["desc"]
-    base_dir = Path(context["base_dir"])
     
-    model_file = base_dir / Path(desc["model_file"])
+    desc = context["desc"]
+    # Make sure the current input type is accepted by the model
+    expected_input = desc.get("model_metadata", {}).get("input_accepted")
+    current_type = context.get("current_type")
+    if current_type not in expected_input:
+        raise ValueError(
+            f"Model expects input type(s) {expected_input}, "
+            f"but current type is '{current_type}'"
+        )
+    
+    base_dir = Path(context["base_dir"])
+    model_file_rel = desc.get("model_metadata", {}).get("model_file")
+    model_meta_rel = desc.get("model_metadata", {}).get("model_meta_file")
+    
+    if not model_file_rel or not model_meta_rel:
+        raise ValueError("Model descriptor missing 'model_file' or 'model_meta_file'")
+
+    model_file = base_dir / Path(model_file_rel)
     model_file = model_file.resolve()
     model = load_model(model_file)
     
-    meta_file = base_dir / Path(desc["model_meta_file"])
+    meta_file = base_dir / Path(model_meta_rel)
     meta_file = meta_file.resolve()
     samples_sequence, samples_f = load_pickle_info(meta_file)
 
@@ -185,28 +98,190 @@ def predict_step(context: Dict) -> Dict:
 
 # --- Orchestration ----------------------------------------------------------
 
-def build_steps_from_descriptor(desc: Dict):
+def build_steps_from_processing_chain(desc: Dict, input_type: str):
+    chain = desc.get("processing_chain", [])
+    if not chain:
+        raise ValueError("Descriptor has no 'processing_chain' to build steps from")
+
+    start_idx = next((i for i, s in enumerate(chain) if input_type in s.get("input_accepted", [])), None)
+    if start_idx is None:
+        raise ValueError(f"Model does not accept input_type '{input_type}'")
+
     steps = []
-    steps.append(ensure_subject_outdir_step)
-    preprocessing = desc.get("preprocessing", {})
-
-    if preprocessing.get("requires_dbm"):
-        steps.append(run_pelican_step)
-    if preprocessing.get("requires_roi_extraction"):
-        steps.append(compute_roi_means_step)
-    if preprocessing.get("requires_dl_feature_extraction"):
-        #steps.append(extract_dl_features_step)
-        logger.debug("Model requests feature_extraction but this step isn't completely implemented.")
-    if preprocessing.get("requires_wscore_normalization"):
-        # placeholder: implement wscore step if available
-        logger.debug("Model requests wscore normalization but no step is implemented.")
-    if preprocessing.get("requires_feature_selection"):
-        steps.append(extract_selected_features)
-    if preprocessing.get("requires_features_inversion"):
-        steps.append(sign_correction_step)
-
-    steps.append(predict_step)
+    for step_cfg in chain[start_idx:]:
+        name = step_cfg.get("step")
+        if name == "dbm_generation":
+            steps.append(make_run_pelican_step(step_cfg))
+        elif name == "roi_extraction":
+            steps.append(make_roi_extraction_step(step_cfg))
+        elif name == "w_score_normalization":
+            steps.append(make_wscore_step(step_cfg))
+        elif name == "feature_selection":
+            steps.append(make_feature_selection_step(step_cfg))
+        elif name == "feature_inversion":
+            steps.append(make_feature_inversion_step(step_cfg))
+        else:
+            raise ValueError(f"Unknown processing step in descriptor: {name}")
     return steps
+
+def make_run_pelican_step(dfg: Dict):
+    """Run PELICAN to produce DBM image from T1 input."""
+    input_accepted = dfg.get("input_accepted", [])
+    output_type = dfg.get("output_type")
+    step_name = dfg.get("step")
+
+    def step(context: Dict):
+        current_type = context.get("current_type")
+        if current_type not in input_accepted:
+            raise ValueError(
+                f"Step {step_name} cannot accept input type '{current_type}'. "
+                f"Accepted: {input_accepted}"
+            )
+        t1_path = context["input_path"]
+        from als_sustain.preprocessing.pelican_runner import run_pelican
+        dbm_path = run_pelican(t1_path, context["subject_outdir"])
+        context["input_path"] = dbm_path
+        context["current_type"] = output_type
+        return context
+    return step
+
+def make_roi_extraction_step(cfg: Dict):
+    """Compute ROI means from a .nii file using the step's atlas """
+    from als_sustain.preprocessing.extract_roi_means_dummy import extract_roi_means_dummy
+    atlases = cfg.get("atlases", [])
+    input_accepted = cfg.get("input_accepted", [])
+    output_type = cfg.get("output_type")
+    step_name = cfg.get("step")
+
+    def step(context: Dict):
+        current_type = context.get("current_type")
+        if current_type not in input_accepted:
+            raise ValueError(
+                f"Step {step_name} cannot accept input type '{current_type}'. "
+                f"Accepted: {input_accepted}"
+            )
+
+        maps_path = context.get("input_path")
+        if maps_path is None:
+            raise ValueError("No input_path available for ROI extraction")
+
+        row = context["row"]
+        pid = row["ID"]
+        visit = row["Visit"]
+        metadata = pd.Series({"ID": pid, "Visit": visit})
+        logger.debug(f"Extracting ROI means for subject {pid} visit {visit} using atlases {atlases}")
+        
+        resources = context.get("resources", {})
+        all_atlas_roi_vals = []
+
+        for atlas_name in atlases:
+            atlas_nifti = resources["paths"]["atlases"].get(atlas_name)
+            roi_vals = extract_roi_means_dummy(maps_path, atlas_nifti)
+            indiv_atlas_vals_to_save = pd.concat([metadata, roi_vals])
+            csv_path = context.get("subject_outdir", {}) / f"roi_means_{atlas_name}.csv"
+            indiv_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
+            all_atlas_roi_vals.append(roi_vals)
+        
+        combined_atlas_roi_vals = pd.concat(all_atlas_roi_vals)
+        all_atlas_vals_to_save = pd.concat([metadata, combined_atlas_roi_vals])
+        csv_path = context.get("subject_outdir", {}) / f"roi_means_all_atlas.csv"
+        logger.debug(f"Saving combined ROI means to {csv_path}")
+        all_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
+        
+        context["features"] = combined_atlas_roi_vals
+        context["current_type"] = output_type
+        return context
+    return step
+
+def make_wscore_step(cfg: Dict):
+    model_artifact = cfg.get("model_artifact")
+    input_accepted = cfg.get("input_accepted", [])
+    output_type = cfg.get("output_type")
+    step_name = cfg.get("step")
+
+    def step(context: Dict):
+        current_type = context.get("current_type")
+        if current_type not in input_accepted:
+            raise ValueError(
+                f"Step {step_name} cannot accept input type '{current_type}'. "
+                f"Accepted: {input_accepted}"
+            )
+        features = context.get("features")
+        if features is None:
+            raise ValueError("No features available for w-score normalization")
+        base_dir = Path(context["base_dir"])
+        if model_artifact is None:
+            raise ValueError("w-score step requires 'model_artifact' in the step config")
+        model_path = base_dir / model_artifact
+        
+        from als_sustain.preprocessing.compute_wscores import compute_wscores
+        ws = compute_wscores(features, wscore_hc_model_path=model_path)
+        context["features"] = ws
+        context["current_type"] = output_type
+        return context
+    return step
+
+def make_feature_selection_step(cfg: Dict):
+    selected = cfg.get("selected_list", [])
+    input_accepted = cfg.get("input_accepted", [])
+    output_type = cfg.get("output_type")
+    step_name = cfg.get("step")
+
+    def step(context: Dict):
+        current_type = context.get("current_type")
+        if current_type not in input_accepted:
+            raise ValueError(
+                f"Step {step_name} cannot accept input type '{current_type}'. "
+                f"Accepted: {input_accepted}"
+            )
+        data = context.get("features")
+        if data is None:
+            raise ValueError("No features available to select from")
+        missing = [f for f in selected if f not in data.index]
+        if missing:
+            raise ValueError(f"Data does not contain required selected features: {missing}")
+        context["features"] = data[selected]
+        context["current_type"] = output_type
+        logger.debug(f"Loaded features {selected}.")
+        return context
+    return step
+
+def make_feature_inversion_step(cfg: Dict):
+    """Invert sign of certain/all features (such as in w-scores) so larger == more abnormal.
+    Controlled by descriptor keys under 'step: feature_inversion':
+      - 'invert_all': bool
+      - 'invert_specific_features_list': list of feature names to invert
+    """
+    invert_all = cfg.get("invert_all", False)
+    invert_list = cfg.get("invert_specific_features_list", [])
+    input_accepted = cfg.get("input_accepted", [])
+    output_type = cfg.get("output_type")
+    step_name = cfg.get("step")
+    
+    def step(context: Dict):
+        current_type = context.get("current_type")
+        if current_type not in input_accepted:
+            raise ValueError(
+                f"Step {step_name} cannot accept input type '{current_type}'. "
+                f"Accepted: {input_accepted}"
+            )
+          
+        data = context.get("features")
+        if data is None:
+            raise ValueError("No features available to invert")
+        if invert_all:
+            to_invert = data.index.tolist()
+        else:
+            to_invert = [f for f in invert_list if f in data.index]
+            if to_invert == []:
+                raise ValueError("No list of features to invert provided.") 
+        for name in to_invert:
+            data.loc[name] = -1 * data.loc[name]
+        context["features"] = data
+        context["current_type"] = output_type
+        logger.debug(f"Inverted features {to_invert}.")
+        return context
+    return step
 
 def run_for_row(
         *,
@@ -215,6 +290,7 @@ def run_for_row(
         workdir: Path,
         resources: Dict,
         base_dir: Path,
+        input_type: str,
     ) -> Dict:
     
     """Process a single CSV row. `row` has keys: ID,Visit,Path
@@ -227,12 +303,12 @@ def run_for_row(
 
     context = {
         "row": row,
+        "current_type": input_type,
         "model_id": model_id,
         "workdir": workdir,
         "base_dir": base_dir,
         "desc": desc,
         "input_path": input_path,
-        "features": pd.Series(),
         "resources": resources, 
     } 
 
@@ -244,22 +320,27 @@ def run_for_row(
         data = data.iloc[0].squeeze() 
         context["features"] = data
 
-    steps = build_steps_from_descriptor(desc)
+    # create subject output directory
+    context = ensure_subject_outdir_step(context)
+
+    steps = build_steps_from_processing_chain(desc, input_type)
     for step in steps:
         context = step(context)
+
+    context = predict_step(context)
 
     result = {
         "ID": row["ID"],
         "Visit": row["Visit"],
         "model_id": model_id,
-        "features_used": context.get("features").index.tolist(),
-        "prediction": context.get("prediction"),
+        "sustain_prediction": context.get("prediction"),
     }
     return result
 
 def run_batch(
         *, 
         input_csv: str, 
+        input_type: str,
         model_id: str, 
         workdir: Path, 
         resources: Dict, 
@@ -274,7 +355,8 @@ def run_batch(
             model_id=model_id, 
             workdir=workdir, 
             resources=resources, 
-            base_dir=base_dir
+            base_dir=base_dir,
+            input_type=input_type,
             )
         results.append(r)
     return results
