@@ -27,4 +27,4 @@ Two supported CSV formats (same columns: `ParticipantID,ParticipantVisit,Path`):
 
 ## Adding new models
 
-Drop model files and a descriptor JSON in `als_sustain/models/` and add the model id to `als_sustain/config/models_catalog.json`. Descriptor JSON must include fields `model_id`, `model_file`, `input_type`, and `preprocessing`.
+Drop model files and a descriptor YAML in `als_sustain/models/` and add the model id to `als_sustain/config/models/models_catalog.yaml`. Descriptor YAML must include fields `model_id`, `model_file`, `input_type`, and `preprocessing`.

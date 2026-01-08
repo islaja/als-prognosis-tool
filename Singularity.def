@@ -11,13 +11,7 @@ From: ubuntu:22.04
         libglib2.0-0 libxext6 libsm6 libxrender1
 
     # upgrade pip
-    python3 -m pip install --upgrade pip
-
-    # install python packages
-    pip3 install numpy pandas scikit-learn nibabel scipy click
-
-    # If using PyTorch uncomment and adjust (CPU wheel example)
-    # pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    conda env create -f environment.yml
 
     # Install PELICAN — adapt to pelican install commands
     # If PELICAN is available via pip or git, install it here.
