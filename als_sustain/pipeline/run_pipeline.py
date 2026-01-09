@@ -147,7 +147,7 @@ def make_run_pelican_step(dfg: Dict):
 
 def make_roi_extraction_step(cfg: Dict):
     """Compute ROI means from a .nii file using the step's atlas """
-    from als_sustain.preprocessing.extract_roi_means_dummy import extract_roi_means_dummy
+    from als_sustain.preprocessing.roi_dummy import compute_roi_dummy
     atlases = cfg.get("atlases", [])
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
@@ -176,7 +176,7 @@ def make_roi_extraction_step(cfg: Dict):
 
         for atlas_name in atlases:
             atlas_nifti = resources["paths"]["atlases"].get(atlas_name)
-            roi_vals = extract_roi_means_dummy(maps_path, atlas_nifti)
+            roi_vals = compute_roi_dummy(maps_path, atlas_nifti)
             indiv_atlas_vals_to_save = pd.concat([metadata, roi_vals])
             csv_path = context.get("subject_outdir", {}) / f"roi_means_{atlas_name}.csv"
             indiv_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
@@ -214,7 +214,7 @@ def make_wscore_step(cfg: Dict):
             raise ValueError("w-score step requires 'model_artifact' in the step config")
         model_path = base_dir / model_artifact
         
-        from als_sustain.preprocessing.compute_wscores import compute_wscores
+        from als_sustain.preprocessing.wscores import compute_wscores
         ws = compute_wscores(features, wscore_hc_model_path=model_path)
         context["features"] = ws
         context["current_type"] = output_type

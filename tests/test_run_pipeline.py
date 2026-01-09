@@ -3,10 +3,10 @@ import yaml
 from pathlib import Path
 
 from als_sustain.pipeline import run_pipeline as rp
-from als_sustain.preprocessing import extract_roi_means_dummy as ermd
-from als_sustain.preprocessing import compute_wscores as cwscores
-from als_sustain.preprocessing import pelican_runner as pr
-#from als_sustain.preprocessing.extract_roi_means_dummy import extract_roi_means_dummy
+from als_sustain.preprocessing import roi_dummy
+from als_sustain.preprocessing import wscores 
+from als_sustain.preprocessing import pelican_runner
+
 
 def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     """
@@ -66,14 +66,14 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
 
     # 5. Set up Monkeypatches
     monkeypatch.setattr(
-        pr,
+        pelican_runner,
         "run_pelican",
         lambda t1_path, subject_outdir: str(tmp_path / "fake_dbm.nii.gz"),
     )
 
     monkeypatch.setattr(
-        ermd,
-        "extract_roi_means_dummy",
+        roi_dummy,
+        "compute_roi_dummy",
         lambda maps_nifti_path, atlas_nifti_path: pd.Series({
             "roi_1": 1.23,
             "roi_2": 4.56,
@@ -82,7 +82,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        cwscores,
+        wscores,
         "compute_wscores",
         lambda features, wscore_hc_model_path: pd.Series({
             "roi_1_wscore": 0.123,
