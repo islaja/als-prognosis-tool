@@ -7,6 +7,7 @@ from als_sustain.preprocessing import roi_dummy
 from als_sustain.preprocessing import wscores 
 from als_sustain.preprocessing import pelican_runner
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
 def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     """
@@ -23,11 +24,11 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     base_dir = tmp_path / "base"
     models_dir = base_dir / "config" / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    workdir = tmp_path / "workdir"
-    workdir.mkdir()
+    outdir = tmp_path / "outdir"
+    outdir.mkdir()
 
     # 2. Load yaml for real model descriptor, but modify to point to fake model files and selected features
-    real_yaml = Path("config/models/CALSNIC_sustain_14_reg_dbm_wscore.yaml")
+    real_yaml = Path(ROOT_DIR / "config" / "models" / "CALSNIC_sustain_14_reg_dbm_wscore.yaml").resolve()
     with real_yaml.open() as f:
         desc = yaml.safe_load(f)
     
@@ -59,7 +60,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
 
     # 4. resources 
     # load yaml for real resources descriptor
-    real_resource_yaml = Path("config/resources.yaml")
+    real_resource_yaml = Path(ROOT_DIR / "config" / "resources.yaml").resolve()
 
     with real_resource_yaml.open() as f:
         resources = yaml.safe_load(f)
@@ -106,10 +107,11 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     result = rp.run_for_row(
         row=row,
         model_id=model_id,
-        workdir=workdir,
-        base_dir=base_dir,
+        desc=desc,
+        outdir=outdir,
         resources=resources,
-        input_type="t1_nifti",
+        root_dir=ROOT_DIR,
+        input_type="t1w_maps",
     )
 
 
@@ -117,7 +119,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # Assert
     # ------------------------------------------------------------------
     
-    expected_csv = workdir / "S01_V1" / "roi_means_all_atlas.csv"
+    expected_csv = outdir / "S01_V1" / "roi_means_all_atlas.csv"
 
     assert expected_csv.exists(), f"CSV not found at {expected_csv}"
 

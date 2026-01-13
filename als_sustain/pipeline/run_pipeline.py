@@ -9,11 +9,12 @@ import logging
 import pandas as pd
 from typing import Dict
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def load_descriptor(*, model_id: str, base_dir: Path) -> Dict:
+def load_descriptor(*, model_id: str, root_dir: Path) -> Dict:
     """
     Load a model descriptor YAML file.
 
@@ -21,7 +22,7 @@ def load_descriptor(*, model_id: str, base_dir: Path) -> Dict:
     ----------
     model_id : str
         Model identifier (filename without .yaml)
-    base_dir : Path
+    root_dir : Path
         Project root directory (container-safe)
 
     Returns
@@ -29,8 +30,7 @@ def load_descriptor(*, model_id: str, base_dir: Path) -> Dict:
     Dict
         Parsed model descriptor
     """
-    path = base_dir / "config" / "models" / f"{model_id}.yaml"
-    path = path.resolve()
+    path = (root_dir / "config" / "models" / f"{model_id}.yaml").resolve()
 
     if not path.exists():
         raise FileNotFoundError(f"Model descriptor not found: {path}")
@@ -45,15 +45,15 @@ def load_descriptor(*, model_id: str, base_dir: Path) -> Dict:
 
 # --- Step implementations ----------------------------------------------------
 # Each step accepts a `context` dict and returns the (modified) context.
-# Context keys: row, model_id, workdir, base_dir, desc, input_path, subject_outdir,
+# Context keys: row, model_id, outdir, root_dir, desc, input_path, subject_outdir,
 # features, arr, scaler, features_used, prediction
 
 def ensure_subject_outdir_step(context: Dict) -> Dict:
     row = context["row"]
-    workdir = context["workdir"]
+    outdir = context["outdir"]
     pid = row["ID"]
     visit = row["Visit"]
-    subject_outdir = Path(workdir) / f"{pid}_{visit}".replace(" ", "_")
+    subject_outdir = Path(outdir / f"{pid}_{visit}".replace(" ", "_")).resolve()
     subject_outdir.mkdir(parents=True, exist_ok=True)
 
     context["subject_outdir"] = subject_outdir
@@ -74,19 +74,16 @@ def predict_step(context: Dict) -> Dict:
             f"but current type is '{current_type}'"
         )
     
-    base_dir = Path(context["base_dir"])
     model_file_rel = desc.get("model_metadata", {}).get("model_file")
     model_meta_rel = desc.get("model_metadata", {}).get("model_meta_file")
     
     if not model_file_rel or not model_meta_rel:
         raise ValueError("Model descriptor missing 'model_file' or 'model_meta_file'")
 
-    model_file = base_dir / Path(model_file_rel)
-    model_file = model_file.resolve()
+    model_file = (context["root_dir"] / Path(model_file_rel)).resolve()
     model = load_model(model_file)
-    
-    meta_file = base_dir / Path(model_meta_rel)
-    meta_file = meta_file.resolve()
+
+    meta_file = (context["root_dir"] / Path(model_meta_rel)).resolve()
     samples_sequence, samples_f = load_pickle_info(meta_file)
 
     data = context.get("features")
@@ -147,24 +144,22 @@ def make_run_pelican_step(dfg: Dict):
 
 def make_roi_extraction_step(cfg: Dict):
     """Compute ROI means from a .nii file using the step's atlas """
-    from als_sustain.preprocessing.roi_dummy import compute_roi_dummy
+    from als_sustain.preprocessing.roi import compute_roi
     atlases = cfg.get("atlases", [])
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
     step_name = cfg.get("step")
 
     def step(context: Dict):
-        current_type = context.get("current_type")
+        current_type = context["current_type"]
         if current_type not in input_accepted:
             raise ValueError(
                 f"Step {step_name} cannot accept input type '{current_type}'. "
                 f"Accepted: {input_accepted}"
             )
 
-        maps_path = context.get("input_path")
-        if maps_path is None:
-            raise ValueError("No input_path available for ROI extraction")
-
+        input_maps_path = context["input_path"]
+        
         row = context["row"]
         pid = row["ID"]
         visit = row["Visit"]
@@ -175,8 +170,14 @@ def make_roi_extraction_step(cfg: Dict):
         all_atlas_roi_vals = []
 
         for atlas_name in atlases:
-            atlas_nifti = resources["paths"]["atlases"].get(atlas_name)
-            roi_vals = compute_roi_dummy(maps_path, atlas_nifti)
+            roi_vals=pd.Series([])
+            roi_vals = compute_roi(
+                root_dir=context["root_dir"],
+                img_resources=resources,
+                atlas_name=atlas_name,
+                input_maps_path=input_maps_path,
+                debug_dir=context.get("debug_dir"),
+                )
             indiv_atlas_vals_to_save = pd.concat([metadata, roi_vals])
             csv_path = context.get("subject_outdir", {}) / f"roi_means_{atlas_name}.csv"
             indiv_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
@@ -209,10 +210,10 @@ def make_wscore_step(cfg: Dict):
         features = context.get("features")
         if features is None:
             raise ValueError("No features available for w-score normalization")
-        base_dir = Path(context["base_dir"])
+        root_dir = Path(context["root_dir"])
         if model_artifact is None:
             raise ValueError("w-score step requires 'model_artifact' in the step config")
-        model_path = base_dir / model_artifact
+        model_path = (root_dir / model_artifact).resolve()
         
         from als_sustain.preprocessing.wscores import compute_wscores
         ws = compute_wscores(features, wscore_hc_model_path=model_path)
@@ -287,41 +288,63 @@ def run_for_row(
         *,
         row: Dict,
         model_id: str,
-        workdir: Path,
+        desc: Dict,
+        outdir: Path,
         resources: Dict,
-        base_dir: Path,
+        root_dir: Path,
         input_type: str,
+        debug_dir: Optional[Path] = None,
     ) -> Dict:
     
     """Process a single CSV row. `row` has keys: ID,Visit,Path
     The Path can be either T1 or a features CSV depending on model descriptor.
     """
 
-    desc = load_descriptor(model_id=model_id, base_dir=base_dir)
-    input_path = row["Path"].strip()
+    input_path = Path(row["Path"].strip()).resolve()  
 
-
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    
+    input_suffixes = input_path.suffixes
+    if 'maps' in input_type:
+        # make sure the input is either a .nii/.nii.gz/.mnc file
+        if not any(suf in input_suffixes for suf in ['.nii', '.nii.gz', '.mnc']):
+            raise ValueError(f"Input path for input_type '{input_type}' must be a .nii/.nii.gz/.mnc file")
+    else: # tabular input_type, expecting a .csv file
+        if '.csv' not in input_suffixes:
+            raise ValueError(f"Input path for input_type '{input_type}' must be a .csv file")
+        
     context = {
         "row": row,
         "current_type": input_type,
         "model_id": model_id,
-        "workdir": workdir,
-        "base_dir": base_dir,
+        "outdir": outdir,
+        "root_dir": root_dir,
         "desc": desc,
         "input_path": input_path,
-        "resources": resources, 
+        "resources": resources,
+        "debug_dir": debug_dir,
     } 
 
-    if input_path.endswith('.csv'):
+    # create subject output directory
+    context = ensure_subject_outdir_step(context)
+    
+    # convert to .nii.gz if necessary
+    if '.mnc' in input_suffixes:
+        from als_sustain.utils.image import minc2nii
+        maps_nifti_path = Path(context["subject_outdir"] / input_path.name.replace(".mnc", ".nii.gz")).resolve()
+        minc2nii(str(input_path), str(maps_nifti_path))
+        input_path = maps_nifti_path
+    
+    context["input_path"] = input_path
+    
+    if '.csv' in input_suffixes:
         data = pd.read_csv(input_path)
         if data.shape[0] != 1:
             raise ValueError("Input features CSV must have exactly one row")
         # pick first row and convert to Series
         data = data.iloc[0].squeeze() 
         context["features"] = data
-
-    # create subject output directory
-    context = ensure_subject_outdir_step(context)
 
     steps = build_steps_from_processing_chain(desc, input_type)
     for step in steps:
@@ -342,21 +365,26 @@ def run_batch(
         input_csv: str, 
         input_type: str,
         model_id: str, 
-        workdir: Path, 
+        outdir: Path, 
         resources: Dict, 
-        base_dir: Path,
+        root_dir: Path,
+        debug_dir: Optional[Path] = None,
     ) -> Dict:
     
     df = pd.read_csv(input_csv)
+    desc = load_descriptor(model_id=model_id, root_dir=root_dir)
+
     results = []
     for _, row in df.iterrows():
         r = run_for_row(
             row=row.to_dict(), 
-            model_id=model_id, 
-            workdir=workdir, 
+            model_id=model_id,
+            desc=desc, 
+            outdir=outdir, 
             resources=resources, 
-            base_dir=base_dir,
+            root_dir=root_dir,
             input_type=input_type,
+            debug_dir=debug_dir,
             )
         results.append(r)
     return results
