@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 
 from als_sustain.pipeline import run_pipeline as rp
-from als_sustain.preprocessing import roi_dummy
+from als_sustain.preprocessing import roi
 from als_sustain.preprocessing import wscores 
 from als_sustain.preprocessing import pelican_runner
 
@@ -69,13 +69,13 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     monkeypatch.setattr(
         pelican_runner,
         "run_pelican",
-        lambda t1_path, subject_outdir: str(tmp_path / "fake_dbm.nii.gz"),
+        lambda *args, **kwargs: str(tmp_path / "fake_dbm.nii.gz"),
     )
 
     monkeypatch.setattr(
-        roi_dummy,
-        "compute_roi_dummy",
-        lambda maps_nifti_path, atlas_nifti_path: pd.Series({
+        roi,
+        "compute_roi",
+        lambda *args, **kwargs: pd.Series({
             "roi_1": 1.23,
             "roi_2": 4.56,
             "roi_3": 7.89
@@ -85,7 +85,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     monkeypatch.setattr(
         wscores,
         "compute_wscores",
-        lambda features, wscore_hc_model_path: pd.Series({
+        lambda *args, **kwargs: pd.Series({
             "roi_1_wscore": 0.123,
             "roi_2_wscore": 0.456,
             "roi_3_wscore": 0.789
@@ -120,13 +120,17 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # ------------------------------------------------------------------
     
     expected_csv = outdir / "S01_V1" / "roi_means_all_atlas.csv"
-
     assert expected_csv.exists(), f"CSV not found at {expected_csv}"
 
+    # Verify the data in the CSV matches our fake ROI values
     df_check = pd.read_csv(expected_csv)
     assert "ID" in df_check.columns
     assert "Visit" in df_check.columns
     assert df_check["ID"].iloc[0] == "S01"
+
+    # Checking specific values from our injected Series
+    assert df_check["roi_1"].iloc[0] == 1.23
+    assert df_check["roi_2"].iloc[0] == 4.56
     
     assert result["ID"] == "S01"
     assert result["Visit"] == "V1"
