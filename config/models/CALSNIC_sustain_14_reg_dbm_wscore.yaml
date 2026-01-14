@@ -1,0 +1,60 @@
+# configs/models/CALSNIC_sustain_14_reg_dbm_wscore.yaml
+version: "1.0.0"
+display_name: ALS SuStaIn (14 pre-selected regional DBM W-scores)
+
+model_metadata:
+  model_id: CALSNIC_sustain_14_reg_dbm_wscore
+  sustain_type: zscore
+  input_accepted: regional_dbm_wscores_subset_inverted
+  model_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pkl
+  model_meta_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pickle
+
+processing_input_accepted: [t1w_maps, dbm_maps, regional_dbm, regional_dbm_wscores]
+
+processing_chain:
+
+  - step: dbm_generation
+    input_accepted: [t1w_maps]
+    output_type: dbm_maps
+    model_artifact: models/pelican.pkl ## need to be confirmed
+
+  - step: roi_extraction
+    input_accepted: [dbm_maps]
+    output_type: regional_dbm
+    #atlases: [allen, jhu50, cerebra, handknob, aal]
+    atlases: [allen, jhu50, cerebra, handknob]
+    #atlases: [jhu50]
+
+  - step: w_score_normalization
+    input_accepted: [regional_dbm]
+    output_type: regional_dbm_wscores
+    model_artifact: models/wscore_v1_control_cohort.pkl
+
+  - step: feature_selection
+    input_accepted: [regional_dbm_wscores]
+    output_type: regional_dbm_wscores_subset
+    # List of 14 features exactly as the model saw them in training
+    selected_list: 
+      - dbm_cerebra_w_precentral
+      - dbm_cerebra_w_paracentral
+      - dbm_jhu50_w_corticospinal_tract
+      - dbm_cerebra_w_brainstem
+      - dbm_cerebra_w_superiorfrontal
+      - dbm_cerebra_w_rostralmiddlefrontal
+      - dbm_cerebra_w_superiorparietal
+      - dbm_cerebra_w_inferiorparietal
+      - dbm_cerebra_w_caudate
+      - dbm_cerebra_w_putamen
+      - dbm_cerebra_w_amygdala
+      - dbm_cerebra_w_hippocampus
+      - dbm_cerebra_w_entorhinal
+      - dbm_cerebra_w_parahippocampal
+
+  - step: feature_inversion # Logic: previous 14 regions are expected to be atrophied compared to controls. We want the final SusTaIn input value to be positive when atrophy is present.
+    input_accepted: [regional_dbm_wscores_subset]
+    output_type: regional_dbm_wscores_subset_inverted
+    invert_all: true 
+    invert_specific_features_list: []
+
+notes: >
+  Steps will be performed according to the input_type. 
