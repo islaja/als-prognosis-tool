@@ -95,7 +95,7 @@ def predict_step(context: Dict) -> Dict:
 
 # --- Orchestration ----------------------------------------------------------
 
-def build_steps_from_processing_chain(desc: Dict, input_type: str):
+def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
     chain = desc.get("processing_chain", [])
     if not chain:
         raise ValueError("Descriptor has no 'processing_chain' to build steps from")
@@ -286,6 +286,7 @@ def make_feature_inversion_step(cfg: Dict):
 
 def run_for_row(
         *,
+        steps: list,
         row: Dict,
         model_id: str,
         desc: Dict,
@@ -346,7 +347,7 @@ def run_for_row(
         data = data.iloc[0].squeeze() 
         context["features"] = data
 
-    steps = build_steps_from_processing_chain(desc, input_type)
+    
     for step in steps:
         context = step(context)
 
@@ -373,10 +374,12 @@ def run_batch(
     
     df = pd.read_csv(input_csv)
     desc = load_descriptor(model_id=model_id, root_dir=root_dir)
+    steps = build_steps_from_processing_chain(desc, input_type)
 
     results = []
     for _, row in df.iterrows():
         r = run_for_row(
+            steps=steps,
             row=row.to_dict(), 
             model_id=model_id,
             desc=desc, 
