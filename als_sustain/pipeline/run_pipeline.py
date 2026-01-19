@@ -7,9 +7,10 @@ inside the step functions to keep import-time lightweight for tests.
 import yaml
 import logging
 import pandas as pd
-from typing import Dict
+from typing import Dict, List
 from pathlib import Path
 from typing import Optional
+import joblib
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,6 @@ def make_roi_extraction_step(cfg: Dict):
         all_atlas_roi_vals = []
 
         for atlas_name in atlases:
-            roi_vals=pd.Series([])
             roi_vals = compute_roi(
                 root_dir=context["root_dir"],
                 img_resources=resources,
@@ -195,10 +195,16 @@ def make_roi_extraction_step(cfg: Dict):
     return step
 
 def make_wscore_step(cfg: Dict):
-    model_artifact = cfg.get("model_artifact")
+    model_artifact = str(cfg.get("model_artifact"))
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
     step_name = cfg.get("step")
+    
+    if model_artifact is None:
+        raise ValueError("w-score step requires 'model_artifact' in the step config")
+    
+    # Outer scope variable
+    cache = {}
 
     def step(context: Dict):
         current_type = context.get("current_type")
@@ -210,15 +216,40 @@ def make_wscore_step(cfg: Dict):
         features = context.get("features")
         if features is None:
             raise ValueError("No features available for w-score normalization")
-        root_dir = Path(context["root_dir"])
-        if model_artifact is None:
-            raise ValueError("w-score step requires 'model_artifact' in the step config")
-        model_path = (root_dir / model_artifact).resolve()
         
+        root_dir = Path(context["root_dir"])
+
+        if "bundle" not in cache:
+            print("Loading wscore models bundle for the first time...")
+            model_path = (root_dir / model_artifact).resolve()
+            with open(model_path, "rb") as f:
+                cache["bundle"] = joblib.load(f)
+        
+        # Use the cached version
+        wscore_models_bundle = cache["bundle"]
+        
+        # Extract patient metadata from the dictionary into a Series
+        row = context["row"]
+        metadata = pd.Series({
+            "filename": row["ID"],
+            "age": row["Age"],
+            "sex": row["Sex"],
+            "scanner": row["Scanner"]
+        })
+
+        # Combine with the existing brain features Series
+        patient_data = pd.concat([metadata, context["features"]])
+
         from als_sustain.preprocessing.wscores import compute_wscores
-        ws = compute_wscores(features, wscore_hc_model_path=model_path)
+        ws = compute_wscores(patient_data=patient_data, wscore_models_bundle=wscore_models_bundle)
+        patient_ws_to_save = pd.concat([metadata, ws])
+        csv_path = context.get("subject_outdir", {}) / f"roi_wscores_all_atlas.csv"
+        logger.debug(f"Saving ROI wscores to {csv_path}")
+        patient_ws_to_save.to_frame().T.to_csv(csv_path, index=False)
+        
         context["features"] = ws
         context["current_type"] = output_type
+
         return context
     return step
 
@@ -370,7 +401,7 @@ def run_batch(
         resources: Dict, 
         root_dir: Path,
         debug_dir: Optional[Path] = None,
-    ) -> Dict:
+    ) -> List:
     
     df = pd.read_csv(input_csv)
     desc = load_descriptor(model_id=model_id, root_dir=root_dir)

@@ -6,7 +6,7 @@ model_metadata:
   model_id: CALSNIC_sustain_14_reg_dbm_wscore
   sustain_type: zscore
   input_accepted: regional_dbm_wscores_subset_inverted
-  model_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pkl
+  model_file: models/CALSNIC_sustain_14_reg_dbm_wscore.joblib
   model_meta_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pickle
 
 processing_input_accepted: [t1w_maps, dbm_maps, regional_dbm, regional_dbm_wscores]
@@ -16,19 +16,19 @@ processing_chain:
   - step: dbm_generation
     input_accepted: [t1w_maps]
     output_type: dbm_maps
-    model_artifact: models/pelican.pkl ## need to be confirmed
+    model_artifact: models/pelican.joblib ## need to be confirmed
 
   - step: roi_extraction
     input_accepted: [dbm_maps]
     output_type: regional_dbm
     #atlases: [allen, jhu50, cerebra, handknob, aal]
     atlases: [allen, jhu50, cerebra, handknob]
-    #atlases: [jhu50]
+    #atlases: [handknob]
 
   - step: w_score_normalization
     input_accepted: [regional_dbm]
     output_type: regional_dbm_wscores
-    model_artifact: models/wscore_v1_control_cohort.pkl
+    model_artifact: models/CALSNIC_wscore_hc_cohort.joblib
 
   - step: feature_selection
     input_accepted: [regional_dbm_wscores]
