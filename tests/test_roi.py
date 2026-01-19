@@ -34,9 +34,8 @@ def test_compute_roi_real_data():
     
     all_atlas_roi_vals = []
     for atlas_name in atlas_names:
-        roi_vals=pd.Series([])
         # --- Act ---
-        results = compute_roi(
+        roi_vals = compute_roi(
                     root_dir=ROOT_DIR,
                     img_resources=resources,
                     atlas_name=atlas_name,
@@ -55,5 +54,5 @@ def test_compute_roi_real_data():
     all_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
 
     # --- Assert ---
-    assert isinstance(results, pd.Series)
-    assert not results.isnull().values.any() # Ensure no NaNs
+    assert isinstance(roi_vals, pd.Series)
+    assert not roi_vals.isnull().values.any() # Ensure no NaNs

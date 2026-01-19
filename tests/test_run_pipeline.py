@@ -39,8 +39,6 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     for step in desc["processing_chain"]:
         if step["step"] == "feature_selection":
             step["selected_list"] = ["roi_1_wscore"]
-        if step["step"] == "w_score_normalization":
-            step["model_artifact"] = "models/dummy_meta.pkl"
 
     desc_path = models_dir / "test_model.yaml"
     with desc_path.open("w") as f:
@@ -51,11 +49,15 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # 3. fake input row
     t1_path = tmp_path / "subj_t1.nii.gz"
     t1_path.write_text("fake")
+    input_type = "t1w_maps"
 
     row = {
         "ID": "S01",
         "Visit": "V1",
         "Path": str(t1_path),
+        "Age": 65,
+        "Sex": "M",
+        "Scanner": "siemenspri",
     }
 
     # 4. resources 
@@ -100,11 +102,14 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
             "prediction": pd.Series({"subtype": "X"}),
         },
     )
-
+    
     # ------------------------------------------------------------------
     # Act
     # ------------------------------------------------------------------
+    steps = rp.build_steps_from_processing_chain(desc, input_type)
+
     result = rp.run_for_row(
+        steps=steps,
         row=row,
         model_id=model_id,
         desc=desc,
