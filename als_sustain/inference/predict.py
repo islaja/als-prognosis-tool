@@ -12,9 +12,12 @@ import joblib
 def load_model(model_path: Path):
     with model_path.open("rb") as f:
         if model_path.suffix == '.pkl' or model_path.suffix == '.pickle':
+            print("Loaded model using pickle.")
             obj = pickle.load(f)
         else:
-            obj = joblib.load(f)
+            print("Loaded model using joblib.")
+            obj = joblib.load(f)  
+  
     return obj
 
 def load_pickle_info(pickle_path: Path):
