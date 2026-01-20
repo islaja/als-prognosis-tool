@@ -1,40 +1,67 @@
-# configs/models/CALSNIC_sustain_14_reg_dbm_wscore.yaml
+# -----------------------------------------------------------------------------
+# ALS SuStaIn model configuration (14 pre-selected regional DBM W-scores)
+#
+# Notes:
+# - This file is NOT intended to be modified at runtime.
+# - This config fully defines the preprocessing chain for model input.
+# - Feature order, selection, and sign conventions are fixed from training.
+# - Paths are relative to the project root directory.
+# -----------------------------------------------------------------------------
+
 version: "1.0.0"
 display_name: ALS SuStaIn (14 pre-selected regional DBM W-scores)
 
 model_metadata:
+  # Unique model identifier
   model_id: CALSNIC_sustain_14_reg_dbm_wscore
+  # Type of SuStaIn model
   sustain_type: zscore
+  # Final input expected by the model
   input_accepted: regional_dbm_wscores_subset_inverted
+  # Model artifact paths (relative to project root)
   model_file: models/CALSNIC_sustain_14_reg_dbm_wscore.joblib
   model_meta_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pickle
 
-processing_input_accepted: [t1w_maps, dbm_maps, regional_dbm, regional_dbm_wscores]
+# Accepted inputs for pipeline execution
+processing_input_accepted:
+  - t1w_maps
+  - dbm_maps
+  - regional_dbm
+  - regional_dbm_wscores
 
+# Preprocessing steps to convert input into model-ready features
 processing_chain:
 
   - step: dbm_generation
     input_accepted: [t1w_maps]
     output_type: dbm_maps
-    model_artifact: models/pelican.joblib ## need to be confirmed
+    # Deformation-based morphometry model
+    model_artifact: models/pelican.joblib  # TODO: confirm production artifact
 
   - step: roi_extraction
     input_accepted: [dbm_maps]
     output_type: regional_dbm
-    #atlases: [allen, jhu50, cerebra, handknob, aal]
-    atlases: [allen, jhu50, cerebra, handknob]
-    #atlases: [handknob]
+    # Atlases used in ROI extraction
+    atlases:
+        - jhu50       # Core atlas required for model input
+        - cerebra     # Core atlas required for model input
+        - allen       # Can be added for extra ROI averages
+        - handknob    # Can be added for extra ROI averages
+        #- aal        # TODO: Not available yet. 
 
   - step: w_score_normalization
     input_accepted: [regional_dbm]
     output_type: regional_dbm_wscores
+    # Healthy control cohort reference for W-score computation
     model_artifact: models/CALSNIC_wscore_hc_cohort.joblib
 
   - step: feature_selection
     input_accepted: [regional_dbm_wscores]
     output_type: regional_dbm_wscores_subset
-    # List of 14 features exactly as the model saw them in training
-    selected_list: 
+    # TRAINING-TIME CONSTRAINT:
+    # Exact list and order of features used during training
+    # Changing these without retraining invalidates the model
+    selected_list:
       - dbm_cerebra_w_precentral
       - dbm_cerebra_w_paracentral
       - dbm_jhu50_w_corticospinal_tract
@@ -50,11 +77,15 @@ processing_chain:
       - dbm_cerebra_w_entorhinal
       - dbm_cerebra_w_parahippocampal
 
-  - step: feature_inversion # Logic: previous 14 regions are expected to be atrophied compared to controls. We want the final SusTaIn input value to be positive when atrophy is present.
+  - step: feature_inversion
     input_accepted: [regional_dbm_wscores_subset]
     output_type: regional_dbm_wscores_subset_inverted
-    invert_all: true 
+    # Inversion rationale:
+    # Features correspond to regions expected to atrophy in ALS.
+    # Inversion ensures higher values indicate more severe pathology.
+    invert_all: true
     invert_specific_features_list: []
 
 notes: >
-  Steps will be performed according to the input_type. 
+  Steps are executed based on input type, ensuring reproducibility of training-time feature representation.
+  Optional atlases may be added for extra ROI analyses, but mandatory atlases must always be present.

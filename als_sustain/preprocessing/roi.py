@@ -1,3 +1,15 @@
+"""
+ROI extraction and atlas-based computations.
+
+This module provides functions to:
+- Normalize ROI names across atlases (`normalize_roi_name`)
+- Compute left, right, and whole averages from atlas ROI maps
+- Compute regional measures for a single subject image using various atlases
+
+Functions are designed to operate on numpy arrays and pandas dataframes for
+flexible pipeline integration. Debug outputs can optionally be written for intermediate steps.
+"""
+
 from pathlib import Path
 import os
 import logging
@@ -13,8 +25,20 @@ logger = logging.getLogger(__name__)
 
 def normalize_roi_name(name: str) -> tuple[str, str]:
     """
-    Returns (base_name, side) where side is 'L', 'R', or 'W'
+    Normalize ROI name and determine laterality.
+
+    Converts a ROI name to a tuple (base_name, side), where side is:
+        - 'l' for left
+        - 'r' for right
+        - 'w' for whole / unknown
+
+    Args:
+        name (str): Raw ROI name from atlas
+
+    Returns:
+        tuple[str, str]: (base_name, side)
     """
+
     name = name.strip()
     LEFT_PATTERN  = r'(_l$| left$|^lh_|^l_)'
     RIGHT_PATTERN = r'(_r$| right$|^rh_|^r_)'
@@ -39,8 +63,22 @@ def compute_lr_whole_averages_for_generic_atlas(
     b_only_left_right_avr: bool = True,
 ) -> dict:
     """
-    Compute Left, Right, and Whole averages from an atlas
-    that only has columns: ID, Name
+    Compute left, right, and whole ROI averages for a generic atlas.
+
+    This function assumes `atlas_info` contains only columns:
+        - 'ID': numeric ROI identifiers
+        - 'Name': ROI names
+
+    Args:
+        atlas_info (pd.DataFrame): ROI metadata table
+        atlas (np.ndarray): Atlas image as integer-labeled array
+        subj_maps (np.ndarray): Subject image array
+        atlas_name (str): Name of the atlas (used in output keys)
+        b_only_left_right_avr (bool): If True, skip left/right separate averages
+
+    Returns:
+        dict: ROI averages with keys like 'dbm_{atlas_name}_l_{ROI}',
+              'dbm_{atlas_name}_r_{ROI}', 'dbm_{atlas_name}_w_{ROI}'
     """
 
     results = {}
@@ -99,7 +137,25 @@ def compute_roi(
         b_only_left_right_avr: bool = True,
         
 ) -> pd.Series:
-    """Compute regional measures for a single image (.nii.gz) at `input_maps_path`.
+    """
+    Compute regional measures for a single subject image using a given atlas.
+
+    Loads atlas and brain mask, optionally removes sulci, and computes
+    left/right/whole ROI averages. Supports Allen, CerebrA, and generic atlases.
+
+    Args:
+        root_dir (Path): Project root directory
+        img_resources (Dict): Resource paths and indices
+        atlas_name (str): Name of the atlas to use
+        input_maps_path (Path): Subject image file (.nii, .nii.gz)
+        debug_dir (Optional[Path]): Directory to save intermediate debug outputs
+        remove_sulci (bool): Whether to exclude sulci voxels
+        max_prob_sulci (float): Threshold for CSF probability when removing sulci
+        b_only_left_right_avr (bool): If True, skip separate L/R averages
+
+    Returns:
+        pd.Series: ROI values with keys formatted as
+                   'dbm_{atlas_name}_{side}_{ROI_name}' (all lowercase)
     """
 
     # Prepare atlas
@@ -129,7 +185,7 @@ def compute_roi(
         allen_atlas = allen_atlas_img.get_fdata()
 
         not_csf_bin = csf_img < max_prob_sulci
-        ventricles_bin = np.isin(allen_atlas, img_resources["indices"]["ventricles"])
+        ventricles_bin = np.isin(allen_atlas, img_resources["allen_ventricles_indices"])
         not_sulci_bin = (not_csf_bin | ventricles_bin)
 
         # update atlas to exclude sulci voxels

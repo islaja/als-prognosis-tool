@@ -1,33 +1,49 @@
+"""
+Pipeline orchestration tests.
+
+These tests validate that:
+- The processing chain is correctly built from a model descriptor
+- Pipeline steps are executed in order
+- Context propagation and outputs are correct
+
+Heavy external computations are monkeypatched to keep tests fast and deterministic.
+"""
+
+from pathlib import Path
 import pandas as pd
 import yaml
-from pathlib import Path
-
 from als_sustain.pipeline import run_pipeline as rp
-from als_sustain.preprocessing import roi
-from als_sustain.preprocessing import wscores 
-from als_sustain.preprocessing import pelican_runner
+from als_sustain.preprocessing import roi, wscores, pelican_runner
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     """
-    Integration-style test for run_for_row().
-    Heavy external steps are monkeypatched, but descriptor loading
-    and pipeline orchestration are real.
+    Integration-style test for `run_for_row()`.
+
+    This test exercises real pipeline orchestration and descriptor parsing,
+    while monkeypatching heavy external steps (Pelican, ROI extraction,
+    w-score computation, and model prediction).
+
+    It verifies that:
+    - The pipeline runs end-to-end for a single row
+    - Intermediate outputs are written to disk
+    - Final prediction results are correctly attached to the output context
     """
 
     # ------------------------------------------------------------------
-    # Arrange: Setup everything the function needs
+    # Arrange
     # ------------------------------------------------------------------
 
-    # 1. Setup directories
+    # Base directories
     base_dir = tmp_path / "base"
     models_dir = base_dir / "config" / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
+    
     outdir = tmp_path / "outdir"
     outdir.mkdir()
 
-    # 2. Load yaml for real model descriptor, but modify to point to fake model files and selected features
+    # Load real model descriptor and adapt it for testing
     real_yaml = Path(ROOT_DIR / "config" / "models" / "CALSNIC_sustain_14_reg_dbm_wscore.yaml").resolve()
     with real_yaml.open() as f:
         desc = yaml.safe_load(f)
@@ -36,6 +52,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     desc["model_metadata"]["model_file"] = "models/dummy.pkl"
     desc["model_metadata"]["model_meta_file"] = "models/dummy_meta.pkl"
 
+    # Restrict feature selection to a known test feature
     for step in desc["processing_chain"]:
         if step["step"] == "feature_selection":
             step["selected_list"] = ["roi_1_wscore"]
@@ -46,7 +63,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
 
     model_id = desc["model_metadata"]["model_id"] 
     
-    # 3. fake input row
+    # Fake input row
     t1_path = tmp_path / "subj_t1.nii.gz"
     t1_path.write_text("fake")
     input_type = "t1w_maps"
@@ -60,14 +77,16 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
         "Scanner": "siemenspri",
     }
 
-    # 4. resources 
-    # load yaml for real resources descriptor
+    # Load real resources descriptor
     real_resource_yaml = Path(ROOT_DIR / "config" / "resources.yaml").resolve()
 
     with real_resource_yaml.open() as f:
         resources = yaml.safe_load(f)
 
-    # 5. Set up Monkeypatches
+    # ------------------------------------------------------------------
+    # Monkeypatch heavy external steps
+    # ------------------------------------------------------------------
+
     monkeypatch.setattr(
         pelican_runner,
         "run_pelican",

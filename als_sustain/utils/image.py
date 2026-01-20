@@ -1,39 +1,52 @@
+"""
+Image utilities for ALS SuStaIn pipeline.
+
+Currently includes:
+- Conversion of MINC files (.mnc) to NIfTI (.nii/.nii.gz) using `mnc2nii`.
+
+Notes:
+- External dependencies: requires `mnc2nii` executable in PATH.
+- Supports optional compression to .nii.gz.
+"""
+
 import subprocess
 import gzip
 import shutil
 from pathlib import Path
 
-def minc2nii(input_path:str, output_path:str): #-> str:
-    """Convert a MINC file to NIfTI format using an external tool (e.g., mnc2nii).
+def minc2nii(input_path:str, output_path:str):
+    """
+    Convert a MINC (.mnc) file to NIfTI (.nii or .nii.gz) format.
 
-    Parameters
-    ----------
-    input_path: path to input MINC file
-    output_path: path to output NIfTI file
-    output_format: format flag for mnc2nii (default '-f' for .nii)
+    Uses the external `mnc2nii` command-line tool. If `output_path` ends with
+    '.gz', the NIfTI file will be compressed automatically.
+
+    Args:
+        input_path (str): Path to the input MINC file (.mnc)
+        output_path (str): Path to the output NIfTI file (.nii or .nii.gz)
+
+    Raises:
+        subprocess.CalledProcessError: If the `mnc2nii` command fails
+        FileNotFoundError: If the input file does not exist
+        ValueError: If the output path has an invalid extension
     """
 
-    # Convert to .nii first
+    # Validate paths
+    input_path_obj = Path(input_path)
+    if not input_path_obj.exists():
+        raise FileNotFoundError(f"Input MINC file {input_path} does not exist")
+    if not input_path.endswith('.mnc'):
+        raise ValueError("Input file must have a .mnc extension")
+    if not output_path.endswith(('.nii', '.nii.gz')):
+        raise ValueError("Output file must have a .nii or .nii.gz extension")
+
+    # Convert to uncompressed NIfTI
     output_tmp = output_path.replace('.gz', '')
-  
     subprocess.run(["mnc2nii", "-float", "-nii", input_path, output_tmp], check=True)
 
+    # Compress if requested
     if output_path.endswith('.gz'):
-        # Compress to .gz  
         with open(output_tmp, 'rb') as f_in:
             with gzip.open(output_path, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        
-        # Remove the uncompressed temp file
         Path(output_tmp).unlink()
-    
-    """if not input_path.endswith('.mnc'):
-        raise ValueError("Input file must be a MINC file with .mnc extension")  
-    if not output_path_nii.endswith(('.nii', '.nii.gz')):
-        raise ValueError("Output file must be a NIfTI file with .nii or .nii.gz extension") 
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"Input MINC file {input_path} does not exist") 
-    
-    cmd = ["mnc2nii", output_format, input_path, output_path]
-    subprocess.check_call(cmd)   """   
-    #return output_path

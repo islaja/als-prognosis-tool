@@ -1,15 +1,38 @@
-"""Model loader and inference wrapper.
-This wrapper expects trained models to be pickled and to expose a method
-that accepts numpy arrays and returns (subtype, stage) or similar.
-Adapt to your SuStaIn implementation.
+"""
+Model loader and inference wrapper for ALS SuStaIn pipeline.
+
+This module provides utilities to:
+- Load trained models (pickled with pickle or joblib)
+- Load supplementary model info from pickled metadata
+- Perform inference on a single subject (with internal handling for SuStaIn API requirements)
+
 """
 import pickle
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 import joblib
 
 def load_model(model_path: Path):
+    """
+    Load a trained model from file.
+
+    Supports .pkl/.pickle (pickle) or other formats (joblib).
+
+    Args:
+        model_path (Path): Path to the saved model file
+
+    Returns:
+        Loaded model object
+
+    Raises:
+        FileNotFoundError: If the model file does not exist
+        Exception: If loading fails
+    """
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
     with model_path.open("rb") as f:
         if model_path.suffix == '.pkl' or model_path.suffix == '.pickle':
             print("Loaded model using pickle.")
@@ -21,6 +44,22 @@ def load_model(model_path: Path):
     return obj
 
 def load_pickle_info(pickle_path: Path):
+    """
+    Load SuStaIn metadata from a pickled file.
+
+    Expected keys in pickle:
+      - 'samples_sequence'
+      - 'samples_f'
+
+    Args:
+        pickle_path (Path): Path to the pickled metadata file
+
+    Returns:
+        tuple: (samples_sequence, samples_f)
+
+    Raises:
+        ValueError: If required keys are missing or file cannot be read
+    """
     try:
         pk = pd.read_pickle(pickle_path)
         samples_sequence = pk["samples_sequence"]
@@ -30,14 +69,33 @@ def load_pickle_info(pickle_path: Path):
         raise ValueError(f"Error loading pickle info from {pickle_path}: {e}")
 
 def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> pd.Series:
-    """Call the model's inference method. Modify to match your model API.
-    Expected return: (subtype_label, stage_value)
     """
-    
-    #output_data = pd.Series()
-    # it seems like sustain can predict on only one subject at a time. We will
-    # create a fake second subject by duplicating the first one with some noise
-    # and we will discard the second subject prediction later.
+    Run SuStaIn inference on a single subject.
+
+    Notes:
+    - SuStaIn requires at least two rows, so the function internally duplicates
+      the subject with slight noise. The duplicate is discarded after prediction.
+    - Stage 0 indicates "no subtype"; subtype is set to 0 for these cases.
+
+    Args:
+        model: Trained SuStaIn model object with method
+            `subtype_and_stage_individuals_newData`
+        samples_sequence: model metadata (samples_sequence)
+        samples_f: model metadata (samples_f)
+        data (pd.Series): Feature vector for a single subject
+
+    Returns:
+        pd.Series: Prediction results including:
+            - ml_subtype: assigned subtype (categorical)
+            - ml_stage: assigned stage (Int64)
+            - prob_ml_subtype: probability of assigned subtype
+            - prob_ml_stage: probability of assigned stage
+            - prob_sN: probability for each subtype N
+
+    Raises:
+        ValueError: If input data is invalid
+    """
+    # Prepare 2-row input for SuStaIn
     output_data = pd.DataFrame(index=range(2))
     data_nparray = np.asarray(data, dtype=np.float64).reshape(1, -1)
     new_row = data_nparray[0] + 0.2*data_nparray[0]
@@ -56,25 +114,23 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
                                                                     samples_f,
                                                                     N_samples)
 
-
+    # Collect outputs into DataFrame
     output_data['ml_subtype'] = ml_subtype
     output_data['prob_ml_subtype'] = prob_ml_subtype
     output_data['ml_stage'] = ml_stage
     output_data['prob_ml_stage'] = prob_ml_stage
 
-    # make current subtypes (0, 1, 2) 1 and 2, 3 instead
-    #output_data.loc[:, ml_subtype_col] = (output_data[ml_subtype_col].to_numpy() + 1).astype('Int64')
+    # Make current subtypes (0, 1, 2) -> (1, 2, 3) instead
     output_data['ml_subtype'] = (output_data['ml_subtype'].astype("Int64") + 1)
 
-    # Define a mask for stage 0
+    # Adjust subtype for stage 0
     stage0_mask = output_data['ml_stage'] == 0
-    # Assign subtype = 0 for stage 0 (meaning: no valid subtype)
     output_data.loc[stage0_mask, 'ml_subtype'] = 0
-
-    # set stage as int
+    # Invalidate subtype probability for stage 0
+    output_data.loc[stage0_mask, 'prob_ml_subtype'] = 0.0
     output_data['ml_stage'] =  output_data['ml_stage'].astype('Int64')
 
-    # set ml_subtype as categorical
+    # Make ml_subtype categorical
     col_values = output_data['ml_subtype']
     categories = sorted(pd.Series(col_values.dropna().unique()))
     output_data['ml_subtype'] = pd.Categorical(
@@ -83,18 +139,9 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
                 ordered=False
             )
 
-    # Invalidate subtype probability for stage 0
-    output_data.loc[stage0_mask, 'prob_ml_subtype'] = 0.0
-    
-    # let's also add the probability for each subject of being each subtype
+    # Add probability per subtype
     for i in range(prob_subtype.shape[1]):
-        # # TODO Why that
-        # if i == 0:
-        #    output_data.loc[:,'prob_s%s'%(i+1)] = 0
         output_data.loc[:,'prob_s%s'%(i+1)] = prob_subtype[:,i]
 
-    # remove fake row 
-    output_data = pd.Series(output_data.iloc[0])
-    print(output_data)
-   
-    return output_data
+    # Return only first subject (discard fake row)
+    return pd.Series(output_data.iloc[0])

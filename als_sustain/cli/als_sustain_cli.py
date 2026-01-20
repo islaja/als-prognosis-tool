@@ -1,35 +1,59 @@
-"""Command line front-end for the package.
+"""
+ALS SuStaIn CLI module.
+
+Provides a command-line interface for running SuStaIn models on batch CSV files
+or full pipeline inputs (features, DBM maps, or T1 images).
+
 Usage examples:
-  # feature-based quick mode (features CSV paths)
-  python -m als_sustain.cli.als_sustain_cli run \
-    --model preselected_regions_DBM_model_testwithdataready \
-    --input examples/Participant_Inputs_File_features_calsnic.csv \
-    --outdir /tmp/out
+  # dbm-wscores-based 
+  python -m als_sustain.cli.als_sustain_cli run \    
+    --model CALSNIC_sustain_14_reg_dbm_wscore \
+    --input_filepath examples/Participant_Inputs_File_features_calsnic.csv \
+    --input_type regional_dbm_wscores \
+    --outdir tmp/from_dbm_wscores \
 
   # whole brain DBM map mode (DBM paths)
   python -m als_sustain.cli.als_sustain_cli run \
-    --model preselected_regions_DBM_model_testwithDBMmaps \
-    --input examples/Participant_Inputs_File_features_calsnic_dbm.csv \
-    --outdir /tmp/out
+    --model CALSNIC_sustain_14_reg_dbm_wscore \
+    --input_filepath examples/Participant_Inputs_File_features_calsnic_dbm_maps.csv \
+    --input_type dbm_maps \
+    --outdir tmp/from_dbm_maps \
+    --show_debug_outputs True
 
   # full pipeline mode (T1 paths)
-  python -m als_sustain.cli.als_sustain_cli run --model preselected_regions_DBM_model --input Participant_Inputs_File_t1.csv --outdir /tmp/out --singularity-bind /data
+  python python -m als_sustain.cli.als_sustain_cli run \
+    --model CALSNIC_sustain_14_reg_dbm_wscore \
+    --input_filepath examples/Participant_Inputs_File_features_calsnic_t1w_maps.csv \
+    --input_type t1w_maps \
+    --outdir tmp/from_t1w_maps \
+    --show_debug_outputs True
 
 When built into the container, provide an entrypoint that maps to the main() below.
 """
+
 import argparse
-from als_sustain.pipeline.run_pipeline import run_batch, load_descriptor
-from als_sustain.utils.io import make_json_safe
 from pathlib import Path
-import yaml
 from typing import Dict
-import json
+
+import yaml
 import pandas as pd
 
+from als_sustain.pipeline.run_pipeline import run_batch, load_descriptor
 
 
 def load_resources(root_dir: Path) -> Dict:
-    """Load container-internal resources configuration."""
+    """
+    Load container-internal resources configuration.
+
+    Args:
+        root_dir (Path): Project root directory where config/resources.yaml resides.
+
+    Returns:
+        Dict: Parsed YAML resources configuration.
+
+    Raises:
+        FileNotFoundError: If resources.yaml is missing.
+    """
     cfg_path = root_dir / "config" / "resources.yaml"
 
     if not cfg_path.exists():
@@ -39,7 +63,18 @@ def load_resources(root_dir: Path) -> Dict:
         return yaml.safe_load(f)
 
 def main():
-    # Get the project root directory (assuming this file is in als_sustain_inference/als_sustain/cli/)
+    """
+    Entry point for ALS SuStaIn CLI.
+
+    Parses command-line arguments, validates inputs against the model descriptor,
+    runs the selected model pipeline, and outputs results (CSV).
+
+    Supports:
+        - roi-based mode
+        - DBM map mode
+        - Full T1 pipeline mode
+    """
+    # Determine project root (assumes this CLI module is at als_sustain/cli/)
     root_dir = Path(__file__).resolve().parent.parent.parent
 
     parser = argparse.ArgumentParser(description='ALS SuStaIn multi-model CLI')
@@ -74,23 +109,26 @@ def main():
         outdir = args.outdir.resolve()
         outdir.mkdir(parents=True, exist_ok=True)
 
+        # Create debug output directory if requested
         if args.show_debug_outputs:
             debug_dir = outdir / "debug_outputs"
             debug_dir.mkdir(parents=True, exist_ok=True)
         else:
             debug_dir = None
 
+        # Load resources configuration
         resources = load_resources(root_dir=root_dir)
 
         if not isinstance(resources, dict):
           raise RuntimeError("Failed to load resources config")
        
-        # Validate --input_type against the model descriptor
+        # Load model descriptor and validate input type
         desc = load_descriptor(model_id=args.model, root_dir=root_dir)
         accepted = desc.get("processing_input_accepted", [])
         if args.input_type not in accepted:
             raise ValueError(f"input_type {args.input_type} not accepted, expected one of: {accepted}")
 
+        # Run the model batch
         results = run_batch(
             input_csv=args.input_filepath,
             input_type=args.input_type,
@@ -101,8 +139,11 @@ def main():
             debug_dir=debug_dir,
         )
 
+        # Print YAML summary
         print('--- Summary ---')
         print(yaml.safe_dump(results, sort_keys=False))
+        
+        # Flatten nested prediction keys and save CSV summary
         results_df = pd.json_normalize(results, sep=".")
         results_df.columns = [
             c.replace("prediction.", "") for c in results_df.columns

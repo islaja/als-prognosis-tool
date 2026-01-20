@@ -1,39 +1,53 @@
-# Container-internal resources (do not change at runtime)
+# -----------------------------------------------------------------------------
+# Container-internal resources configuration
+#
+# This file defines static resources required by the preprocessing pipeline.
+# Paths are resolved relative to the project root (model registry root).
+#
+# IMPORTANT:
+# - This file is NOT intended to be modified at runtime.
+# - All referenced files must be available inside the container / environment.
+# -----------------------------------------------------------------------------
 
 paths:
+  # Binary masks used during preprocessing
   masks:
+    # Whole-brain mask (MNI space)
     brain: resources/masks/mni_icbm152_t1_tal_nlin_sym_09c_mask.nii
+    # CSF probability map used for sulci removal
     csf_prob: resources/masks/mni_icbm152_csf_tal_nlin_sym_09c.nii
 
+  # Atlases that may be used for ROI extraction
   atlases:
     allen: resources/atlases/atlas_Allen_mni_icbm152_t1_tal_nlin_sym_09b_labels.nii
     cerebra: resources/atlases/atlas_CerebrA_mni_icbm152_tal_nlin_sym_09c.nii
     jhu50: resources/atlases/atlas_JHU-ICBM-tracts-maxprob-thr50-1mm-sym.nii.gz
     handknob: resources/atlases/Hand_Knob_ROIs_xm34_ym22_z54_spherical_9mm_gm02_gm_and_wm_wocsf.nii.gz
 
+  # Atlas metadata tables
   atlases_info:
     allen: resources/atlases/atlas_Allen_mni_icbm152_t1_tal_nlin_sym_09b_labels_info.csv
     cerebra: resources/atlases/atlas_CerebrA_mni_icbm152_tal_nlin_sym_09c_info.csv
     jhu50: resources/atlases/atlas_JHU-ICBM-tracts-maxprob-thr50-1mm-sym_info.csv
     handknob: resources/atlases/Hand_Knob_ROIs_xm34_ym22_z54_spherical_9mm_gm02_gm_and_wm_wocsf_info.csv
 
-indices:
-  ventricles:
-    - 119
-    - 1119
-    - 57
-    - 1057
-    - 58
-    - 1058
-    - 59
-    - 1059
-    - 60
-    - 1060
-    - 61
-    - 1061
-    - 141
-    - 1141
-    - 129
-    - 1129
-    - 130
-    - 1130
+allen_ventricles_indices:
+  # Allen ventricles ROI labels (used to preserve ventricles when removing sulci)
+  - 119
+  - 1119
+  - 57
+  - 1057
+  - 58
+  - 1058
+  - 59
+  - 1059
+  - 60
+  - 1060
+  - 61
+  - 1061
+  - 141
+  - 1141
+  - 129
+  - 1129
+  - 130
+  - 1130

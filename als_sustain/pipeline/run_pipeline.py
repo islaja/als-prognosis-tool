@@ -1,15 +1,50 @@
-"""Top-level pipeline runner.
-This code reads a model descriptor JSON and routes inputs through a step/context
-pipeline so preprocessing steps are composable and testable. Imports that may
-require large optional dependencies (nibabel, sklearn, etc.) are done lazily
-inside the step functions to keep import-time lightweight for tests.
 """
-import yaml
+Top-level pipeline runner.
+
+This module reads a model descriptor YAML and routes inputs through a composable
+processing step pipeline. Each step is implemented as a function that accepts and
+returns a context dictionary. 
+
+Context Keys
+------------
+row : dict
+    CSV row for a subject (keys: ID, Visit, Path, Age, Sex, Scanner, etc.)
+current_type : str
+    Type of current data in pipeline ('t1w_maps', 'regional_dbm', etc.)
+model_id : str
+    Identifier of the model being run
+outdir : Path
+    Root output directory
+root_dir : Path
+    Project root directory (used to resolve files)
+desc : dict
+    Parsed model descriptor YAML
+input_path : Path
+    Path to the current input file (CSV or image)
+subject_outdir : Path
+    Directory for per-subject outputs
+resources : dict
+    Loaded resources configuration (atlases, etc.)
+debug_dir : Path or None
+    Optional directory for debug outputs
+features : pandas.Series
+    Features extracted/processed through the pipeline
+prediction : dict
+    Model prediction results
+
+Notes:
+- 'features' is created after ROI extraction or CSV input reading.
+- 'prediction' is added by `predict_step`.
+- 'debug_dir' is optional; only used if debug outputs are enabled.
+"""
+
+
 import logging
-import pandas as pd
-from typing import Dict, List
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
+
+import yaml
+import pandas as pd
 import joblib
 
 logger = logging.getLogger(__name__)
@@ -19,17 +54,16 @@ def load_descriptor(*, model_id: str, root_dir: Path) -> Dict:
     """
     Load a model descriptor YAML file.
 
-    Parameters
-    ----------
-    model_id : str
-        Model identifier (filename without .yaml)
-    root_dir : Path
-        Project root directory (container-safe)
+    Args:
+        model_id (str): Model identifier (filename without .yaml)
+        root_dir (Path): Project root directory
 
-    Returns
-    -------
-    Dict
-        Parsed model descriptor
+    Returns:
+        Dict: Parsed model descriptor
+
+    Raises:
+        FileNotFoundError: If the YAML file does not exist
+        ValueError: If the YAML file cannot be parsed into a dict
     """
     path = (root_dir / "config" / "models" / f"{model_id}.yaml").resolve()
 
@@ -44,12 +78,19 @@ def load_descriptor(*, model_id: str, root_dir: Path) -> Dict:
 
     return desc
 
-# --- Step implementations ----------------------------------------------------
-# Each step accepts a `context` dict and returns the (modified) context.
-# Context keys: row, model_id, outdir, root_dir, desc, input_path, subject_outdir,
-# features, arr, scaler, features_used, prediction
-
 def ensure_subject_outdir_step(context: Dict) -> Dict:
+    """
+    Create and ensure the subject-specific output directory exists.
+
+    Args:
+        context (Dict): Pipeline context (must include 'row' and 'outdir')
+
+    Returns:
+        Dict: Updated context with 'subject_outdir'
+
+    Raises:
+        None explicitly
+    """
     row = context["row"]
     outdir = context["outdir"]
     pid = row["ID"]
@@ -61,8 +102,19 @@ def ensure_subject_outdir_step(context: Dict) -> Dict:
     return context
 
 def predict_step(context: Dict) -> Dict:
-    # TODO add prediction for survival model
-    """Load model and predict using the normalized array in context (lazy import)."""
+    """
+    Generate predictions for the current context using the model.
+
+    Args:
+        context (Dict): Pipeline context (must include 'desc', 'features', 'root_dir', 'current_type')
+
+    Returns:
+        Dict: Context updated with 'prediction'
+
+    Raises:
+        ValueError: If features are missing or input type is invalid
+    """
+
     from als_sustain.inference.predict import load_model, load_pickle_info, predict_with_model
     
     desc = context["desc"]
@@ -94,9 +146,20 @@ def predict_step(context: Dict) -> Dict:
     context["prediction"] = prediction.to_dict()
     return context
 
-# --- Orchestration ----------------------------------------------------------
-
 def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
+    """
+    Build a list of pipeline step functions from the model descriptor.
+
+    Args:
+        desc (Dict): Model descriptor containing 'processing_chain'
+        input_type (str): Type of input data
+
+    Returns:
+        list: Ordered list of callable step functions
+
+    Raises:
+        ValueError: If descriptor has no processing chain or input_type is not accepted
+    """
     chain = desc.get("processing_chain", [])
     if not chain:
         raise ValueError("Descriptor has no 'processing_chain' to build steps from")
@@ -123,7 +186,22 @@ def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
     return steps
 
 def make_run_pelican_step(dfg: Dict):
-    """Run PELICAN to produce DBM image from T1 input."""
+    """
+    Create a step function that runs PELICAN to generate DBM maps from T1 input.
+
+    Args:
+        dfg (Dict): Step configuration from model descriptor, must contain:
+            - input_accepted (list): List of input types this step can accept
+            - output_type (str): Output type produced
+            - step (str): Step name
+
+    Returns:
+        Callable: A step function that modifies the pipeline context
+
+    Raises:
+        ValueError: If current input type is not accepted by the step
+    """
+
     input_accepted = dfg.get("input_accepted", [])
     output_type = dfg.get("output_type")
     step_name = dfg.get("step")
@@ -144,7 +222,32 @@ def make_run_pelican_step(dfg: Dict):
     return step
 
 def make_roi_extraction_step(cfg: Dict):
-    """Compute ROI means from a .nii file using the step's atlas """
+    """
+    Create a step function to compute ROI means from input images using specified atlases.
+
+    Args:
+        cfg (Dict): Step configuration, must contain:
+            - input_accepted (list)
+            - output_type (str)
+            - step (str)
+            - atlases (list): List of atlas names to extract ROIs from
+
+    Returns:
+        Callable: A step function that updates context with extracted ROI features
+
+    Context keys used:
+        - input_path: Path to the current image or maps
+        - subject_outdir: Directory to save ROI CSVs
+        - resources: dict with atlas resources
+
+    Context keys modified:
+        - features: pandas Series of ROI values
+        - current_type: updated to output_type
+
+    Raises:
+        ValueError: If current input type is not accepted
+    """
+
     from als_sustain.preprocessing.roi import compute_roi
     atlases = cfg.get("atlases", [])
     input_accepted = cfg.get("input_accepted", [])
@@ -195,6 +298,33 @@ def make_roi_extraction_step(cfg: Dict):
     return step
 
 def make_wscore_step(cfg: Dict):
+    """
+    Create a step function to compute w-scores for extracted features.
+
+    Args:
+        cfg (Dict): Step configuration, must contain:
+            - input_accepted (list)
+            - output_type (str)
+            - step (str)
+            - model_artifact (str): Path to w-score model file
+
+    Returns:
+        Callable: A step function that updates context with normalized w-scores
+
+    Context keys used:
+        - features: pandas Series with extracted features
+        - root_dir: project root directory
+        - row: dict with patient metadata (ID, Age, Sex, Scanner)
+        - subject_outdir: directory to save w-score CSV
+
+    Context keys modified:
+        - features: updated with w-scores
+        - current_type: updated to output_type
+
+    Raises:
+        ValueError: If features are missing or model_artifact not provided
+        FileNotFoundError: If model_artifact file does not exist
+    """
     model_artifact = str(cfg.get("model_artifact"))
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
@@ -254,6 +384,30 @@ def make_wscore_step(cfg: Dict):
     return step
 
 def make_feature_selection_step(cfg: Dict):
+    """
+    Create a step function that selects a subset of features.
+
+    Args:
+        cfg (Dict): Step configuration, must contain:
+            - input_accepted (list)
+            - output_type (str)
+            - step (str)
+            - selected_list (list): Features to retain
+
+    Returns:
+        Callable: A step function that filters features in context
+
+    Context keys used:
+        - features: pandas Series with feature values
+
+    Context keys modified:
+        - features: reduced to selected subset
+        - current_type: updated to output_type
+
+    Raises:
+        ValueError: If features are missing or required features are not present
+    """
+
     selected = cfg.get("selected_list", [])
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
@@ -279,10 +433,30 @@ def make_feature_selection_step(cfg: Dict):
     return step
 
 def make_feature_inversion_step(cfg: Dict):
-    """Invert sign of certain/all features (such as in w-scores) so larger == more abnormal.
-    Controlled by descriptor keys under 'step: feature_inversion':
-      - 'invert_all': bool
-      - 'invert_specific_features_list': list of feature names to invert
+    """
+    Create a step function to invert the sign of features so larger values indicate
+    more abnormality.
+
+    Args:
+        cfg (Dict): Step configuration, must contain:
+            - input_accepted (list)
+            - output_type (str)
+            - step (str)
+            - invert_all (bool): Whether to invert all features
+            - invert_specific_features_list (list): Specific features to invert
+
+    Returns:
+        Callable: A step function that updates context with inverted features
+
+    Context keys used:
+        - features: pandas Series with feature values
+
+    Context keys modified:
+        - features: with inverted signs
+        - current_type: updated to output_type
+
+    Raises:
+        ValueError: If no features are available or no features specified for inversion
     """
     invert_all = cfg.get("invert_all", False)
     invert_list = cfg.get("invert_specific_features_list", [])
@@ -326,10 +500,27 @@ def run_for_row(
         root_dir: Path,
         input_type: str,
         debug_dir: Optional[Path] = None,
-    ) -> Dict:
-    
-    """Process a single CSV row. `row` has keys: ID,Visit,Path
-    The Path can be either T1 or a features CSV depending on model descriptor.
+    ) -> Dict: 
+    """
+    Run the full processing pipeline for a single subject row.
+
+    Args:
+        steps (list): List of processing step functions
+        row (Dict): CSV row with keys: ID, Visit, Visit_Date, Age, Sex, Scanner, Path
+        model_id (str): Model identifier
+        desc (Dict): Model descriptor
+        outdir (Path): Root output directory
+        resources (Dict): Resources loaded from config
+        root_dir (Path): Project root directory
+        input_type (str): Type of input (features, DBM maps, T1)
+        debug_dir (Optional[Path]): Optional debug outputs directory
+
+    Returns:
+        Dict: Prediction result for this subject
+
+    Raises:
+        FileNotFoundError: If input file does not exist
+        ValueError: If input file type is invalid or features are missing
     """
 
     input_path = Path(row["Path"].strip()).resolve()  
@@ -402,7 +593,26 @@ def run_batch(
         root_dir: Path,
         debug_dir: Optional[Path] = None,
     ) -> List:
-    
+    """
+    Run the pipeline for all rows in a CSV file.
+
+    Args:
+        input_csv (str): Path to CSV with participant rows
+        input_type (str): Type of input data (features, DBM maps, T1)
+        model_id (str): Model identifier
+        outdir (Path): Root output directory
+        resources (Dict): Loaded resources configuration
+        root_dir (Path): Project root directory
+        debug_dir (Optional[Path]): Directory for debug outputs
+
+    Returns:
+        List[Dict]: List of prediction results for each row
+
+    Raises:
+        FileNotFoundError: If CSV or inputs are missing
+        ValueError: If CSV or data are invalid
+    """
+
     df = pd.read_csv(input_csv)
     desc = load_descriptor(model_id=model_id, root_dir=root_dir)
     steps = build_steps_from_processing_chain(desc, input_type)
