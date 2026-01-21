@@ -213,10 +213,23 @@ def make_run_pelican_step(dfg: Dict):
                 f"Step {step_name} cannot accept input type '{current_type}'. "
                 f"Accepted: {input_accepted}"
             )
+
+        subject_ID = context["row"]["ID"]
+        visit = context["row"]["Visit"]
         t1_path = context["input_path"]
-        from als_sustain.preprocessing.pelican_runner import run_pelican
-        dbm_path = run_pelican(t1_path, context["subject_outdir"])
-        context["input_path"] = dbm_path
+        subject_outdir = context["subject_outdir"]
+
+        # Ensure Pelican setup only once per pipeline run
+        from als_sustain.backends.pelican.setup import ensure_pelican_ready
+        from als_sustain.backends.pelican.run import run_pelican
+        pelican_cfg = ensure_pelican_ready()
+        
+        dbm_outputs = run_pelican(subject_ID, visit, t1_path, subject_outdir, pelican_cfg)
+        # Create a single string with each path on a new line
+        paths_string = "\n".join(str(p) for p in dbm_outputs)
+        print(f"DBM map(s) created at:\n{paths_string}")
+
+        context["input_path"] = dbm_outputs
         context["current_type"] = output_type
         return context
     return step
@@ -261,9 +274,8 @@ def make_roi_extraction_step(cfg: Dict):
                 f"Step {step_name} cannot accept input type '{current_type}'. "
                 f"Accepted: {input_accepted}"
             )
-
-        input_maps_path = context["input_path"]
         
+        input_maps_path = context["input_path"]
         row = context["row"]
         pid = row["ID"]
         visit = row["Visit"]
