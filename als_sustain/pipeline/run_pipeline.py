@@ -215,16 +215,17 @@ def make_run_pelican_step(dfg: Dict):
             )
         
         t1_path = context["input_path"]
+        
         # convert to .mnc if necessary
         if ".nii" in t1_path.suffixes:
             from als_sustain.utils.image import nii2minc
-            t1_path_suffix = t1_path.suffixes.joined("")
+            t1_path_suffix = "".join(t1_path.suffixes)
             t1_mnc_path = Path(context["subject_outdir"] / t1_path.name.replace(t1_path_suffix, ".mnc")).resolve()
-            nii2minc(str(t1_path), str(t1_mnc_path))
+            nii2minc(t1_path, t1_mnc_path)
             t1_path = t1_mnc_path
 
-        from als_sustain.preprocessing.pelican_runner import run_pelican
-        dbm_path = run_pelican(t1_path, context["subject_outdir"])
+        from als_sustain.preprocessing.pelican_runner import run_pelican_dummy
+        dbm_path = run_pelican_dummy(t1_path, context["subject_outdir"])
         context["input_path"] = dbm_path
         context["current_type"] = output_type
         return context
@@ -272,11 +273,11 @@ def make_roi_extraction_step(cfg: Dict):
             )
 
         input_maps_path = context["input_path"]
-        # convert to .nii.gz if necessary
+        # Convert to .nii.gz if necessary
         if input_maps_path.suffix == '.mnc':
             from als_sustain.utils.image import minc2nii
             maps_nifti_path = Path(context["subject_outdir"] / input_maps_path.name.replace(".mnc", ".nii.gz")).resolve()
-            minc2nii(str(input_maps_path), str(maps_nifti_path))
+            minc2nii(input_maps_path, maps_nifti_path)
             input_maps_path = maps_nifti_path
 
         row = context["row"]
