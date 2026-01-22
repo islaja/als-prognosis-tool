@@ -83,9 +83,10 @@ def nii2minc(input_path:Path, output_path:Path):
     # Decompress if needed
     if '.gz' in input_path.suffixes:
         with gzip.open(input_path, 'rb') as f_in:
-            with open(input_path.with_suffix('.nii'), 'wb') as f_out:
+            output_path_ungz = input_path.with_suffix('')
+            with open(output_path_ungz, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        input_tmp = input_path.with_suffix('.nii')
+        input_tmp = output_path_ungz
     else:
         input_tmp = input_path
 
