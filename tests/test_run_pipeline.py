@@ -14,6 +14,7 @@ import pandas as pd
 import yaml
 from als_sustain.pipeline import run_pipeline as rp
 from als_sustain.preprocessing import roi, wscores, pelican_runner
+from als_sustain.utils import image
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
@@ -36,6 +37,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # ------------------------------------------------------------------
 
     # Base directories
+    tmp_path = Path(tmp_path).resolve()
     base_dir = tmp_path / "base"
     models_dir = base_dir / "config" / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -64,7 +66,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     model_id = desc["model_metadata"]["model_id"] 
     
     # Fake input row
-    t1_path = tmp_path / "subj_t1.nii.gz"
+    t1_path = tmp_path / "subj_t1.mnc"
     t1_path.write_text("fake")
     input_type = "t1w_maps"
 
@@ -88,9 +90,21 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # ------------------------------------------------------------------
 
     monkeypatch.setattr(
+        image,
+        "minc2nii",
+        lambda minc_path, nii_path: nii_path.write_text("fake nii content"),
+    )
+
+    monkeypatch.setattr(
+        image,
+        "nii2minc",
+        lambda nii_path, minc_path: minc_path.write_text("fake minc content"),
+    )
+
+    monkeypatch.setattr(
         pelican_runner,
-        "run_pelican",
-        lambda *args, **kwargs: str(tmp_path / "fake_dbm.nii.gz"),
+        "run_pelican_dummy",
+        lambda *args, **kwargs: Path(tmp_path / "fake_dbm.mnc"),
     )
 
     monkeypatch.setattr(
