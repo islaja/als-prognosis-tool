@@ -15,9 +15,6 @@ from typing import Optional
 
 PEL_CAN_VERSION = "1.0"
 
-DEFAULT_CONFIG_DIR = Path.home() / ".config" / "als_sustain"
-DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "pelican.yaml"
-
 PELICAN_SIF_URL = "https://example.org/PELICAN_minc_ants_anaconda.sif"
 PELICAN_MODELS_ZIP_URL = "https://example.org/PELICAN_Repository.zip"
 
@@ -52,7 +49,6 @@ def ensure_pelican_ready(
     models_dir = base_dir / "models"
 
     if not force and _is_pelican_ready(sif_path, models_dir):
-        validate_pelican_install(sif_path, models_dir)
         return PelicanConfig(sif_path=sif_path, models_dir=models_dir, version=PEL_CAN_VERSION)
 
     if interactive:
@@ -60,26 +56,8 @@ def ensure_pelican_ready(
 
     _ensure_container(sif_path, force=force)
     _ensure_models(models_dir, force=force)
-    validate_pelican_install(sif_path, models_dir)
-    _write_config(sif_path, models_dir)
 
     return PelicanConfig(sif_path=sif_path, models_dir=models_dir, version=PEL_CAN_VERSION)
-
-
-def validate_pelican_install(sif_path: Path, models_dir: Path) -> None:
-    """
-    Public function: check that Pelican container and models exist and are correct.
-    Raises RuntimeError if anything is missing or malformed.
-    """
-    if not sif_path.exists():
-        raise RuntimeError(f"Pelican container not found: {sif_path}")
-    if not models_dir.exists() or not any(models_dir.iterdir()):
-        raise RuntimeError(f"Pelican models missing or empty: {models_dir}")
-
-    expected_subfolders = ["atlases", "templates"]  # update according to Pelican repo
-    for folder in expected_subfolders:
-        if not (models_dir / folder).exists():
-            raise RuntimeError(f"Pelican models missing expected folder: {folder}")
 
 
 # -------------------------
@@ -128,17 +106,7 @@ def _download_file(*, url: str, destination: Path, label: str) -> None:
 def _extract_zip(zip_path: Path, target_dir: Path) -> None:
     print("[⛏] Extracting models")
     subprocess.run(["unzip", "-q", str(zip_path), "-d", str(target_dir)], check=True)
-
-
-def _write_config(sif_path: Path, models_dir: Path) -> None:
-    DEFAULT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    content = f"""pelican:
-  sif: {sif_path}
-  models_dir: {models_dir}
-  version: {PEL_CAN_VERSION}
-"""
-    DEFAULT_CONFIG_FILE.write_text(content)
-
+    
 
 def _print_banner() -> None:
     print("=" * 60)
