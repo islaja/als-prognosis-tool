@@ -10,8 +10,8 @@ from als_sustain.backends.pelican.setup import PelicanConfig, ensure_pelican_rea
 
 def run_pelican(
     subject_id: str,
-    t1w_path: Union[Path, List[Path]],
     subj_visit: Union[str, List[str]],
+    t1w_path: Union[Path, List[Path]],
     output_dir: Path,
     pelican_cfg: Optional[PelicanConfig] = None,
     *,

@@ -12,8 +12,9 @@ Heavy external computations are monkeypatched to keep tests fast and determinist
 from pathlib import Path
 import pandas as pd
 import yaml
+from als_sustain.backends.pelican import setup, run
 from als_sustain.pipeline import run_pipeline as rp
-from als_sustain.preprocessing import roi, wscores, pelican_runner
+from als_sustain.preprocessing import roi, wscores
 from als_sustain.utils import image
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -102,9 +103,19 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        pelican_runner,
-        "run_pelican_dummy",
-        lambda *args, **kwargs: Path(tmp_path / "fake_dbm.mnc"),
+        setup,
+        "ensure_pelican_ready",
+        lambda *args, **kwargs: setup.PelicanConfig(
+            sif_path=Path("/fake/pelican.sif"),
+            models_dir=Path("/fake/models"),
+            version="1.0",
+        ),  
+    )
+
+    monkeypatch.setattr(
+        run,
+        "run_pelican",
+        lambda *args, **kwargs: [Path(tmp_path / "fake_dbm.mnc")],
     )
 
     monkeypatch.setattr(

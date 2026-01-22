@@ -231,12 +231,15 @@ def make_run_pelican_step(dfg: Dict):
         from als_sustain.backends.pelican.setup import ensure_pelican_ready
         from als_sustain.backends.pelican.run import run_pelican
         pelican_cfg = ensure_pelican_ready()
-        
-        dbm_outputs = run_pelican(subject_ID, t1_path, visit, subject_outdir, pelican_cfg)
+        dbm_outputs = run_pelican(subject_ID, visit, t1_path, subject_outdir, pelican_cfg)
         # Create a single string with each path on a new line
         paths_string = "\n".join(str(p) for p in dbm_outputs)
         print(f"DBM map(s) created at:\n{paths_string}")
 
+        # For now the current pipeline is treating one visit at a time, so one output.
+        # TODO handle multiple visits per subject.
+        dbm_outputs = dbm_outputs[0]
+        
         context["input_path"] = dbm_outputs
         context["current_type"] = output_type
         return context
