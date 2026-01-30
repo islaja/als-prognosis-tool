@@ -53,12 +53,11 @@ def normalize_roi_name(name: str) -> tuple[str, str]:
 
     return name, "w"
 
-
-def compute_lr_whole_averages_for_generic_atlas(
+def compute_roi_averages_for_generic_atlas(
     *,
     atlas_info: pd.DataFrame,
     atlas: np.ndarray,
-    subj_maps: np.ndarray,
+    subj_maps_data: np.ndarray,
     atlas_name: str,
     b_only_left_right_avr: bool = True,
 ) -> dict:
@@ -115,13 +114,13 @@ def compute_lr_whole_averages_for_generic_atlas(
 
         # --- Left / Right ---
         if not b_only_left_right_avr:
-            val_L = np.mean(subj_maps[mask_L]) if mask_L is not None and np.any(mask_L) else np.nan
-            val_R = np.mean(subj_maps[mask_R]) if mask_R is not None and np.any(mask_R) else np.nan
+            val_L = np.mean(subj_maps_data[mask_L]) if mask_L is not None and np.any(mask_L) else np.nan
+            val_R = np.mean(subj_maps_data[mask_R]) if mask_R is not None and np.any(mask_R) else np.nan
             results[f"dbm_{atlas_name}_l_{base_name}"] = round(val_L, 3) if not np.isnan(val_L) else np.nan
             results[f"dbm_{atlas_name}_r_{base_name}"] = round(val_R, 3) if not np.isnan(val_R) else np.nan
 
         # --- Whole ---
-        val_W = np.mean(subj_maps[mask_W]) if mask_W is not None and np.any(mask_W) else np.nan
+        val_W = np.mean(subj_maps_data[mask_W]) if mask_W is not None and np.any(mask_W) else np.nan
         results[f"dbm_{atlas_name}_w_{base_name}"] = round(val_W, 3) if not np.isnan(val_W) else np.nan
 
     return results
@@ -157,7 +156,7 @@ def compute_roi(
         pd.Series: ROI values with keys formatted as
                    'dbm_{atlas_name}_{side}_{ROI_name}' (all lowercase)
     """
-
+    
     # Prepare atlas
     atlas_path =  (root_dir / img_resources["paths"]["atlases"][atlas_name]).resolve()
     atlas_img = nib.load(atlas_path)
@@ -167,7 +166,7 @@ def compute_roi(
     atlas_info = pd.read_csv(atlas_info_path)
 
     # Prepare brain mask
-    brain_mask_path = (root_dir / img_resources["paths"]["masks"]["brain"]).resolve()
+    brain_mask_path = (root_dir / img_resources["paths"]["template"]["brain_mask"]).resolve()
     brain_mask_img = nib.load(brain_mask_path)
     brain_mask = brain_mask_img.get_fdata().astype(bool)
 
@@ -177,7 +176,7 @@ def compute_roi(
     # Optional: remove sulci using a CSF probability map while keeping ventricles
     if remove_sulci:
         # query the repo-level resources config
-        csf_prob_file = (root_dir / img_resources["paths"]["masks"]["csf_prob"]).resolve()
+        csf_prob_file = (root_dir / img_resources["paths"]["template"]["csf_prob"]).resolve()
         csf_img = nib.load(csf_prob_file).get_fdata()
 
         allen_atlas_path = (root_dir / img_resources["paths"]["atlases"]["allen"]).resolve()
@@ -199,7 +198,8 @@ def compute_roi(
             nib.save(atlas_img, debug_atlas_wo_sulci_path)
             logger.info(f'Wrote sulci-removed atlas {debug_dir}')
     
-    subj_maps = nib.load(input_maps_path).get_fdata()
+    subj_img = nib.load(input_maps_path)
+    subj_maps_data = subj_img.get_fdata()
 
     # prepare results dict for this image
     results = {}
@@ -216,12 +216,12 @@ def compute_roi(
 
             # If we also want the left and right separated
             if not b_only_left_right_avr:
-                val_L = np.mean(subj_maps[mask_L]) if np.any(mask_L) else np.nan
-                val_R = np.mean(subj_maps[mask_R]) if np.any(mask_R) else np.nan    
+                val_L = np.mean(subj_maps_data[mask_L]) if np.any(mask_L) else np.nan
+                val_R = np.mean(subj_maps_data[mask_R]) if np.any(mask_R) else np.nan    
                 results[f'dbm_{atlas_name}_l_{acronym}'] = round(val_L, 3) if not np.isnan(val_L) else np.nan
                 results[f'dbm_{atlas_name}_r_{acronym}'] = round(val_R, 3) if not np.isnan(val_R) else np.nan
             
-            val_W = np.mean(subj_maps[mask_W]) if np.any(mask_W) else np.nan
+            val_W = np.mean(subj_maps_data[mask_W]) if np.any(mask_W) else np.nan
             results[f'dbm_{atlas_name}_w_{acronym}'] = round(val_W, 3) if not np.isnan(val_W) else np.nan
 
     elif atlas_name == "cerebra": 
@@ -236,19 +236,18 @@ def compute_roi(
 
             # If we also want the left and right separated
             if not b_only_left_right_avr:
-                val_L = np.mean(subj_maps[mask_L]) if np.any(mask_L) else np.nan
-                val_R = np.mean(subj_maps[mask_R]) if np.any(mask_R) else np.nan               
+                val_L = np.mean(subj_maps_data[mask_L]) if np.any(mask_L) else np.nan
+                val_R = np.mean(subj_maps_data[mask_R]) if np.any(mask_R) else np.nan               
                 results[f'dbm_{atlas_name}_l_{label_name}'] = round(val_L, 3) if not np.isnan(val_L) else np.nan
                 results[f'dbm_{atlas_name}_r_{label_name}'] = round(val_R, 3) if not np.isnan(val_R) else np.nan
             
-            val_W = np.mean(subj_maps[mask_W]) if np.any(mask_W) else np.nan
+            val_W = np.mean(subj_maps_data[mask_W]) if np.any(mask_W) else np.nan
             results[f'dbm_{atlas_name}_w_{label_name}'] = round(val_W, 3) if not np.isnan(val_W) else np.nan
-
     else:
-        results = compute_lr_whole_averages_for_generic_atlas(
+        results = compute_roi_averages_for_generic_atlas(
             atlas_info=atlas_info,
             atlas=atlas,
-            subj_maps=subj_maps,
+            subj_maps_data=subj_maps_data,
             atlas_name=atlas_name,
             b_only_left_right_avr=b_only_left_right_avr,
         )
