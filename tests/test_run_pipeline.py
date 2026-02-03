@@ -120,7 +120,7 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         roi,
-        "compute_roi",
+        "compute_roi_all_atlas",
         lambda *args, **kwargs: pd.Series({
             "roi_1": 1.23,
             "roi_2": 4.56,
@@ -167,19 +167,6 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # ------------------------------------------------------------------
     # Assert
     # ------------------------------------------------------------------
-    
-    expected_csv = outdir / "S01_V1" / "roi_means_all_atlas.csv"
-    assert expected_csv.exists(), f"CSV not found at {expected_csv}"
-
-    # Verify the data in the CSV matches our fake ROI values
-    df_check = pd.read_csv(expected_csv)
-    assert "ID" in df_check.columns
-    assert "Visit" in df_check.columns
-    assert df_check["ID"].iloc[0] == "S01"
-
-    # Checking specific values from our injected Series
-    assert df_check["roi_1"].iloc[0] == 1.23
-    assert df_check["roi_2"].iloc[0] == 4.56
     
     assert result["ID"] == "S01"
     assert result["Visit"] == "V1"

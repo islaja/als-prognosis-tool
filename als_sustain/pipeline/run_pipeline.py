@@ -272,11 +272,14 @@ def make_roi_extraction_step(cfg: Dict):
         ValueError: If current input type is not accepted
     """
 
-    from als_sustain.preprocessing.roi import compute_roi
+    from als_sustain.preprocessing.roi import compute_roi_all_atlas
     atlases = cfg.get("atlases", [])
     input_accepted = cfg.get("input_accepted", [])
     output_type = cfg.get("output_type")
     step_name = cfg.get("step")
+    remove_sulci = bool(cfg.get("remove_sulci"))
+    csf_threshold = cfg.get("csf_threshold", None)
+    result_prefix = cfg.get("result_prefix", "")
 
     def step(context: Dict):
         current_type = context["current_type"]
@@ -295,33 +298,25 @@ def make_roi_extraction_step(cfg: Dict):
             input_maps_path = maps_nifti_path
 
         row = context["row"]
-        pid = row["ID"]
-        visit = row["Visit"]
-        metadata = pd.Series({"ID": pid, "Visit": visit})
-        logger.debug(f"Extracting ROI means for subject {pid} visit {visit} using atlases {atlases}")
+        metadata = pd.Series({"ID": row["ID"], "Visit": row["Visit"]})
+        logger.debug(f"Extracting ROI means for subject {row['ID']} visit {row['Visit']} using atlases {atlases}")
         
         resources = context.get("resources", {})
-        all_atlas_roi_vals = []
-
-        for atlas_name in atlases:
-            roi_vals = compute_roi(
-                root_dir=context["root_dir"],
-                img_resources=resources,
-                atlas_name=atlas_name,
-                input_maps_path=input_maps_path,
-                debug_dir=context.get("debug_dir"),
-                )
-            indiv_atlas_vals_to_save = pd.concat([metadata, roi_vals])
-            csv_path = context.get("subject_outdir", {}) / f"roi_means_{atlas_name}.csv"
-            indiv_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
-            all_atlas_roi_vals.append(roi_vals)
         
-        combined_atlas_roi_vals = pd.concat(all_atlas_roi_vals)
-        all_atlas_vals_to_save = pd.concat([metadata, combined_atlas_roi_vals])
-        csv_path = context.get("subject_outdir", {}) / f"roi_means_all_atlas.csv"
-        logger.debug(f"Saving combined ROI means to {csv_path}")
-        all_atlas_vals_to_save.to_frame().T.to_csv(csv_path, index=False)
-        
+        combined_atlas_roi_vals = compute_roi_all_atlas(
+            atlases_name=atlases, 
+            root_dir=context["root_dir"],
+            subject_meta=metadata,
+            input_maps_path=input_maps_path,
+            img_resources=resources,
+            out_dir=context.get("subject_outdir", {}),
+            remove_sulci=remove_sulci,
+            csf_threshold=csf_threshold,
+            result_prefix=result_prefix,
+            debug_dir=context.get("debug_dir"),
+            include_sides=False
+            )
+    
         context["features"] = combined_atlas_roi_vals
         context["current_type"] = output_type
         return context
@@ -506,13 +501,13 @@ def make_feature_inversion_step(cfg: Dict):
         if data is None:
             raise ValueError("No features available to invert")
         if invert_all:
-            to_invert = data.index.tolist()
+            context["features"] = data * -1
         else:
             to_invert = [f for f in invert_list if f in data.index]
             if to_invert == []:
                 raise ValueError("No list of features to invert provided.") 
-        for name in to_invert:
-            data.loc[name] = -1 * data.loc[name]
+            for name in to_invert:
+                data.at[name] = -1 * data.at[name]
         context["features"] = data
         context["current_type"] = output_type
         logger.debug(f"Inverted features {to_invert}.")
