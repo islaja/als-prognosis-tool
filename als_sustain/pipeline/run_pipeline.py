@@ -47,6 +47,8 @@ import yaml
 import pandas as pd
 import joblib
 
+from als_sustain.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
+
 logger = logging.getLogger(__name__)
 
 
@@ -146,7 +148,7 @@ def predict_step(context: Dict) -> Dict:
     context["prediction"] = prediction.to_dict()
     return context
 
-def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
+def build_steps_from_processing_chain(desc: Dict, input_type: str) -> tuple[list, bool]:
     """
     Build a list of pipeline step functions from the model descriptor.
 
@@ -168,8 +170,13 @@ def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
     if start_idx is None:
         raise ValueError(f"Model does not accept input_type '{input_type}'")
 
+    active_chain = chain[start_idx:]
+    
+    # Check if Pelican is actually going to be in the final list
+    pelican_needed = any(s.get("step") == "dbm_generation" for s in active_chain)
+
     steps = []
-    for step_cfg in chain[start_idx:]:
+    for step_cfg in active_chain:
         name = step_cfg.get("step")
         if name == "dbm_generation":
             steps.append(make_run_pelican_step(step_cfg))
@@ -183,7 +190,8 @@ def build_steps_from_processing_chain(desc: Dict, input_type: str) -> list:
             steps.append(make_feature_inversion_step(step_cfg))
         else:
             raise ValueError(f"Unknown processing step in descriptor: {name}")
-    return steps
+        
+    return steps, pelican_needed
 
 def make_run_pelican_step(dfg: Dict):
     """
@@ -224,23 +232,29 @@ def make_run_pelican_step(dfg: Dict):
             from als_sustain.utils.image import nii2minc
             t1_path_suffix = "".join(t1_path.suffixes)
             t1_mnc_path = Path(context["subject_outdir"] / t1_path.name.replace(t1_path_suffix, ".mnc")).resolve()
-            nii2minc(t1_path, t1_mnc_path)
+            if not t1_mnc_path.exists():
+                nii2minc(t1_path, t1_mnc_path)
             t1_path = t1_mnc_path
 
         # Ensure Pelican setup only once per pipeline run
-        from als_sustain.backends.pelican.setup import ensure_pelican_ready
         from als_sustain.backends.pelican.run import run_pelican
-        pelican_cfg = ensure_pelican_ready()
-        dbm_outputs = run_pelican(subject_ID, visit, t1_path, subject_outdir, pelican_cfg)
+        pelican_output_path = (subject_outdir / "pelican_outputs").resolve()
+        dbm_file_paths = run_pelican(
+            subject_ID, 
+            visit, 
+            t1_path,
+            pelican_output_path, 
+            context.get("pelican_cfg"),
+        )
         # Create a single string with each path on a new line
-        paths_string = "\n".join(str(p) for p in dbm_outputs)
+        paths_string = "\n".join(str(p) for p in dbm_file_paths)
         print(f"DBM map(s) created at:\n{paths_string}")
 
         # For now the current pipeline is treating one visit at a time, so one output.
         # TODO handle multiple visits per subject.
-        dbm_outputs = dbm_outputs[0]
+        dbm_file_path = dbm_file_paths[0]
         
-        context["input_path"] = dbm_outputs
+        context["input_path"] = dbm_file_path
         context["current_type"] = output_type
         return context
     return step
@@ -502,15 +516,18 @@ def make_feature_inversion_step(cfg: Dict):
             raise ValueError("No features available to invert")
         if invert_all:
             context["features"] = data * -1
+            logger.debug(f"Inverted all features.")
         else:
             to_invert = [f for f in invert_list if f in data.index]
             if to_invert == []:
                 raise ValueError("No list of features to invert provided.") 
             for name in to_invert:
                 data.at[name] = -1 * data.at[name]
-        context["features"] = data
+            context["features"] = data
+            logger.debug(f"Inverted features {to_invert}.")
+
         context["current_type"] = output_type
-        logger.debug(f"Inverted features {to_invert}.")
+        
         return context
     return step
 
@@ -524,6 +541,7 @@ def run_for_row(
         resources: Dict,
         root_dir: Path,
         input_type: str,
+        pelican_cfg: Optional[PelicanConfig] = None,
         debug_dir: Optional[Path] = None,
     ) -> Dict: 
     """
@@ -571,6 +589,7 @@ def run_for_row(
         "desc": desc,
         "input_path": input_path,
         "resources": resources,
+        "pelican_cfg": pelican_cfg,
         "debug_dir": debug_dir,
     } 
 
@@ -632,7 +651,11 @@ def run_batch(
 
     df = pd.read_csv(input_csv)
     desc = load_descriptor(model_id=model_id, root_dir=root_dir)
-    steps = build_steps_from_processing_chain(desc, input_type)
+    steps, pelican_needed = build_steps_from_processing_chain(desc, input_type)
+
+    pelican_cfg: Optional[PelicanConfig] = None
+    if pelican_needed:
+        pelican_cfg = ensure_pelican_ready()
 
     results = []
     for _, row in df.iterrows():
@@ -645,6 +668,7 @@ def run_batch(
             resources=resources, 
             root_dir=root_dir,
             input_type=input_type,
+            pelican_cfg=pelican_cfg,
             debug_dir=debug_dir,
             )
         results.append(r)
