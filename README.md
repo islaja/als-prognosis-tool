@@ -16,15 +16,11 @@ methodology described in:
 > detailed documentation regarding the trained model parameters,
 > harmonization techniques, and the control cohort used for w-scoring.*
 
+This model was created using the **pySuStaIn** framework ([ucl-pond/pySuStaIn](https://github.com/ucl-pond/pySuStaIn)) based on the Subtype and Stage Inference algorithm (doi: [10.1038/s41467-018-05892-0](https://doi.org/10.1038/s41467-018-05892-0)). It was trained on **CALSNIC 1-2 data** ([https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)) using regional W-scores from **14 anatomical regions** that integrate Brettschneider pTDP-43 stages with ALS imaging literature. These regions include the motor/premotor cortices, corticospinal tract and brainstem, fronto-parietal association cortices, basal ganglia, and medial temporal structures.
+
 ------------------------------------------------------------------------
 
 ## 🧠 The Processing Pipeline
-
-**Currently, there is only one accessible model:** `CALSNIC_sustain_14_reg_dbm_wscore`. This model is the one described in the referenced article and specifically requires regional W-scores from **14 regions** that integrate Brettschneider pTDP-43 stages with ALS imaging literature. These regions include:
-    * Motor/premotor cortices.
-    * Corticospinal tract and brainstem.
-    * Fronto-parietal association cortices.
-    * Basal ganglia and medial temporal structures
 
 For users providing **T1-weighted scans** (`t1w_maps`), the tool
 executes a fully automated pipeline:
@@ -43,7 +39,7 @@ executes a fully automated pipeline:
     control dataset described in the referenced article.
 5.  **SuStaIn Staging:** Finally, the **14 selected regional W-scores** 
     are input into the pre-trained SuStaIn model to determine the 
-    disease subtype and stage. This model was trained using the **pySuStaIn** framework ([ucl-pond/pySuStaIn](https://github.com/ucl-pond/pySuStaIn)) based on the Subtype and Stage Inference algorithm (doi: [10.1038/s41467-018-05892-0](https://doi.org/10.1038/s41467-018-05892-0)).
+    disease subtype and stage. 
 
 ------------------------------------------------------------------------
 
