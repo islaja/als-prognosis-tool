@@ -62,38 +62,26 @@ To process your data, use the following command in your terminal.
 Replace `/path/to/your/data` with your actual local data folder.
 
 ``` bash
-docker run --rm --platform linux/amd64   -v "/path/to/your/data:/app/data"   -v "$HOME/.cache/als_sustain:/root/.cache/als_sustain"   islaja/als-sustain-app:latest   --model CALSNIC_sustain_14_reg_dbm_wscore   --input_filepath /app/data/YOUR_INPUT_FILE.csv   --input_type t1w_maps   --outdir /app/data/output_results
+docker run --rm --platform linux/amd64 \
+-v "/path/to/your/data:/app/data" \
+-v "$HOME/.cache/als_sustain:/root/.cache/als_sustain" \
+islaja/als-sustain-app:latest \
+--model CALSNIC_sustain_14_reg_dbm_wscore \
+--input_filepath /app/data/YOUR_INPUT_FILE.csv \
+--input_type t1w_maps \
+--outdir /app/data/output_results
 ```
 
 ## 🛠 Command Flags
-
-  -------------------------------------------------------------------------
-  Flag                                Description
-  ----------------------------------- -------------------------------------
-  -v "/host/path:/app/data"           Volume Mount: Connects your local
-                                      data folder to the container's
-                                      internal /app/data path.
-
-  -v "...:/root/.cache/als_sustain"   Cache Mount: Stores the 3.3GB Pelican
-                                      models on your host machine to avoid
-                                      re-downloading.
-
-  --model                             Currently only one accessible model:
-                                      CALSNIC_sustain_14_reg_dbm_wscore. This must be specified as shown.
-
-  --input_filepath                    Internal path to your CSV file (e.g.,
-                                      /app/data/subjects.csv).
-
-  --input_type                        Specifies your data stage: t1w_maps,
-                                      dbm_maps, regional_dbm, or
-                                      regional_dbm_wscore.
-
-  --outdir                            Where to save the results (e.g.,
-                                      /app/data/results).
-
-  --show_debug_outputs                Set to True to see detailed logs and
-                                      intermediate files.
-  -------------------------------------------------------------------------
+| Flag | Description |
+| :--- | :--- |
+| `-v "/host/path:/app/data"` | **Volume Mount**: Connects your local data folder to the container's internal `/app/data` path. |
+| `-v "...:/root/.cache/als_sustain"` | **Cache Mount**: Stores the 3.3GB Pelican models on your host machine to avoid re-downloading. |
+| `--model` | **Currently only one accessible model:** `CALSNIC_sustain_14_reg_dbm_wscore`. This must be specified as shown. |
+| `--input_filepath` | Internal path to your CSV file (e.g., `/app/data/subjects.csv`). |
+| `--input_type` | Specifies your data stage: `t1w_maps`, `dbm_maps`, `regional_dbm`, or `regional_dbm_wscore`. |
+| `--outdir` | Where to save the results (e.g., `/app/data/results`). |
+| `--show_debug_outputs` | Set to `True` to see detailed logs and intermediate files. |
 
 ------------------------------------------------------------------------
 
@@ -128,21 +116,12 @@ If provided, the scanner value should be one of the following supported options:
 
 ### Input Type Details
 
-  -----------------------------------------------------------------------
-  Input Type                          Path column should point to...
-  ----------------------------------- -----------------------------------
-  t1w_maps                            Raw .mnc or .nii T1-weighted scan
-                                      files.
-
-  dbm_maps                            Pre-existing DBM maps in .mnc or .nii
-                                      format.
-
-  regional_dbm                        .csv files containing extracted
-                                      regional DBM averages.
-
-  regional_dbm_wscore                 .csv files containing
-                                      pre-calculated regional W-scores
-  -----------------------------------------------------------------------
+| Input Type | Path column should point to... |
+| :--- | :--- |
+| `t1w_maps` | Raw `.mnc` or `.nii` T1-weighted scan files. |
+| `dbm_maps` | Pre-existing DBM maps in `.mnc` or `.nii` format. |
+| `regional_dbm` | `.csv` files containing extracted regional DBM averages. |
+| `regional_dbm_wscore` | `.csv` files containing pre-calculated regional W-scores. |
 
 ------------------------------------------------------------------------
 
