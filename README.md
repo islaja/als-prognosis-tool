@@ -25,19 +25,24 @@ This model was created using the **pySuStaIn** framework ([ucl-pond/pySuStaIn](h
 For users providing **T1-weighted scans** (`t1w_maps`), the tool
 executes a fully automated pipeline:
 
-1.  **DBM Generation (Pelican):** Utilizes the **Pelican** deep learning
-    framework
-    (https://github.com/VANDAlab/Preprocessing_Pipeline?tab=readme-ov-file)
-    to generate high-quality Deformation Based Morphometry (DBM) maps.
-2.  **Model Weights:** The container automatically manages the Pelican
-    model weights, hosted on Zenodo:
+1.  **DBM Generation (Pelican):** Utilizes the Pelican Longitudinal 
+    Processing Pipeline
+    (https://github.com/VANDAlab/Preprocessing_Pipeline)
+    to generate high-quality Deformation Based Morphometry (DBM) maps. 
+    The container automatically download the required 
+    Pelican repository, hosted on Zenodo:
     https://zenodo.org/records/17168419.
-3.  **Regional Extraction:** Once DBM maps are generated, the pipeline
-    extracts regional averages from the anatomical volumes.
-4.  **W-Scoring:** These regional values are converted into **W-scores**
+2.  **Regional Extraction:** Once DBM maps are generated, the pipeline extracts
+    regional averages from the anatomical volumes. Beyond the 14 regions required for SuStaIn, this step computes averages for:
+    * All Gray Matter (GM) regions from the **CerebrA atlas** [ref].
+    * GM and ventricle volumes from the **Allen atlas** [ref].
+    * White Matter (WM) tracts from the **JHU atlas** [ref].
+    * Combined GM and WM "hand-knob" regions using a **custom anatomical mask**.  
+    The **ICBM CSF probability mask** was employed to exclude sulci from the average computation to ensure signal purity. All templates, atlas maps, and label descriptions are available under the `/resources` folder.
+3.  **W-Scoring:** These regional values are converted into W-scores
     (z-scores adjusted for age, sex, and scanner) based on the normative
     control dataset described in the referenced article.
-5.  **SuStaIn Staging:** Finally, the **14 selected regional W-scores** 
+4.  **SuStaIn Staging:** Finally, the 14 selected regional W-scores*
     are input into the pre-trained SuStaIn model to determine the 
     disease subtype and stage. 
 

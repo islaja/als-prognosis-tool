@@ -35,19 +35,19 @@ processing_chain:
   - step: dbm_generation
     input_accepted: [t1w_maps]
     output_type: dbm_maps
-    # Deformation-based morphometry model
-    model_artifact: models/pelican.joblib  # TODO: confirm production artifact
-
+    
   - step: roi_extraction
     input_accepted: [dbm_maps]
     output_type: regional_dbm
+    result_prefix: 'dbm_'
     # Atlases used in ROI extraction
     atlases:
-        - jhu50       # Core atlas required for model input
+        - jhu25       # Core atlas required for model input
         - cerebra     # Core atlas required for model input
         - allen       # Can be added for extra ROI averages
         - handknob    # Can be added for extra ROI averages
-        #- aal        # TODO: Not available yet. 
+    remove_sulci: true # Whether we exclude the sulci from the ROI avr computation
+    csf_threshold: 0.2 # The csf threshold above what it is considered as sulci.
 
   - step: w_score_normalization
     input_accepted: [regional_dbm]
@@ -64,7 +64,7 @@ processing_chain:
     selected_list:
       - dbm_cerebra_w_precentral
       - dbm_cerebra_w_paracentral
-      - dbm_jhu50_w_corticospinal_tract
+      - dbm_jhu25_w_corticospinal_tract
       - dbm_cerebra_w_brainstem
       - dbm_cerebra_w_superiorfrontal
       - dbm_cerebra_w_rostralmiddlefrontal

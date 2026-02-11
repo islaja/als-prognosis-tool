@@ -9,27 +9,34 @@
 # - All referenced files must be available inside the container / environment.
 # -----------------------------------------------------------------------------
 
-paths:
-  # Binary masks used during preprocessing
-  masks:
-    # Whole-brain mask (MNI space)
-    brain: resources/masks/mni_icbm152_t1_tal_nlin_sym_09c_mask.nii
+paths:  
+  # ICBM template
+  template:
+    # Extracted brain anatomical template
+    brain: resources/template/mni_icbm152_t1_tal_nlin_sym_09c_extracted.nii
+    # Binary brain mask 
+    brain_mask: resources/template/mni_icbm152_t1_tal_nlin_sym_09c_mask.nii
     # CSF probability map used for sulci removal
-    csf_prob: resources/masks/mni_icbm152_csf_tal_nlin_sym_09c.nii
+    csf_prob: resources/template/mni_icbm152_csf_tal_nlin_sym_09c.nii
 
   # Atlases that may be used for ROI extraction
   atlases:
     allen: resources/atlases/atlas_Allen_mni_icbm152_t1_tal_nlin_sym_09b_labels.nii
     cerebra: resources/atlases/atlas_CerebrA_mni_icbm152_tal_nlin_sym_09c.nii
-    jhu50: resources/atlases/atlas_JHU-ICBM-tracts-maxprob-thr50-1mm-sym.nii.gz
+    #jhu50: resources/atlases/atlas_jhu50_mni_icbm152_asym.nii.gz # asymetrical 
+    #jhu50: resources/atlases/atlas_jhu50_mni_icbm152_sym.nii # symetrical
+    jhu25: resources/atlases/atlas_jhu25_mni_icbm152_sym.nii # symetrical
     handknob: resources/atlases/Hand_Knob_ROIs_xm34_ym22_z54_spherical_9mm_gm02_gm_and_wm_wocsf.nii.gz
+    aal: resources/atlases/atlas_AAL3v1_1mm_in_ICBM2009sym.nii.gz
 
   # Atlas metadata tables
   atlases_info:
     allen: resources/atlases/atlas_Allen_mni_icbm152_t1_tal_nlin_sym_09b_labels_info.csv
     cerebra: resources/atlases/atlas_CerebrA_mni_icbm152_tal_nlin_sym_09c_info.csv
-    jhu50: resources/atlases/atlas_JHU-ICBM-tracts-maxprob-thr50-1mm-sym_info.csv
+    #jhu50: resources/atlases/atlas_jhu50_mni_icbm152_asym_info.csv
+    jhu25: resources/atlases/atlas_jhu25_mni_icbm152_sym_info.csv
     handknob: resources/atlases/Hand_Knob_ROIs_xm34_ym22_z54_spherical_9mm_gm02_gm_and_wm_wocsf_info.csv
+    aal: resources/atlases/atlas_AAL3v1_1mm_in_ICBM2009sym_info.csv
 
 allen_ventricles_indices:
   # Allen ventricles ROI labels (used to preserve ventricles when removing sulci)
