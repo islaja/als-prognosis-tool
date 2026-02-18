@@ -411,8 +411,13 @@ def make_wscore_step(cfg: Dict):
 
         from als_sustain.preprocessing.wscores import compute_wscores
         ws = compute_wscores(patient_data=patient_data, wscore_models_bundle=wscore_models_bundle)
-        patient_ws_to_save = pd.concat([metadata, ws])
         csv_path = context.get("subject_outdir", {}) / f"roi_wscores_all_atlas.csv"
+        patient_ws_to_save = pd.concat([metadata, ws])
+        # Round only the numeric part of the series first
+        patient_ws_to_save = patient_ws_to_save.apply(
+            lambda x: round(x, 3) if isinstance(x, (int, float)) else x
+        )
+        # Now transpose and save
         logger.debug(f"Saving ROI wscores to {csv_path}")
         patient_ws_to_save.to_frame().T.to_csv(csv_path, index=False)
         

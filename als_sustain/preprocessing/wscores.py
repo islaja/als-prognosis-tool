@@ -48,8 +48,7 @@ def compute_wscores(patient_data : pd.Series, wscore_models_bundle: dict):
             if roi in patient_df.columns:
                 expected_val = bundle["model"].predict(patient_df).iloc[0]
                 observed_val = patient_df[roi].iloc[0] 
-                wscores = (observed_val - expected_val) / bundle["sigma"]
-                results[roi] = round(wscores, 3) if not pd.isna(wscores) else pd.NA
+                results[roi] = (observed_val - expected_val) / bundle["sigma"]
         
         return pd.Series(results)
     

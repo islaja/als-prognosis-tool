@@ -88,10 +88,9 @@ islaja/als-sustain-app:latest \
 
 ## 📄 Data & CSV Formatting
 
-The CSV file acts as a manifest for the pipeline. It must be placed
-inside your local data folder.
+The input CSV file (situated in input_filepath) acts as a manifest for the pipeline. It must be placed inside your local data folder.
 
-### CSV Structure
+### input CSV Structure
 
 Your CSV must contain these mandatory columns:
 

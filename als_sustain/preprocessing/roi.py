@@ -233,7 +233,12 @@ def compute_roi_all_atlas(atlases_name: List[str],
                 )
             subj_roi_avr = pd.Series(subj_roi_avr_dict)
             meta_and_atlas_roi = pd.concat([subject_meta, subj_roi_avr])
-            pd.Series(meta_and_atlas_roi).to_frame().T.to_csv(csv_path, index=False, float_format='%.3f')
+            # Round only the numeric part of the series first
+            rounded_vals = meta_and_atlas_roi.apply(
+                lambda x: round(x, 3) if isinstance(x, (int, float)) else x
+            )
+            # Now transpose and save
+            rounded_vals.to_frame().T.to_csv(csv_path, index=False)
         else:
             meta_and_atlas_roi = pd.read_csv(csv_path).iloc[0]
             # remove subject metadata
@@ -245,7 +250,12 @@ def compute_roi_all_atlas(atlases_name: List[str],
     meta_and_combined_atlas_roi_vals = pd.concat([subject_meta, combined_atlas_roi_vals])
     csv_path = out_dir / f"roi_means_all_atlas.csv"
     logger.debug(f"Saving combined ROI means to {csv_path}")
-    meta_and_combined_atlas_roi_vals.to_frame().T.to_csv(csv_path, index=False, float_format='%.3f')
+    # Round only the numeric part of the series first
+    rounded_vals = meta_and_combined_atlas_roi_vals.apply(
+        lambda x: round(x, 3) if isinstance(x, (int, float)) else x
+    )
+    # Now transpose and save
+    rounded_vals.to_frame().T.to_csv(csv_path, index=False)
 
     # Make columns' name lower case, except for those that turns out to be the same when lowered.
     lower_counts = combined_atlas_roi_vals.index.str.lower().value_counts()

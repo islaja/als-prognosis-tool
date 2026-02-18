@@ -4,3 +4,6 @@ version = "0.1.0"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+"als_sustain.backends.pelican" = ["*.sh"]
