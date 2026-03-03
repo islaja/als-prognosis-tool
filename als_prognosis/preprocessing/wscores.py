@@ -7,7 +7,7 @@ based on healthy control models.
 
 import pandas as pd
 
-def compute_wscores(patient_data : pd.Series, wscore_models_bundle: dict):
+def compute_wscores(patient_data : pd.Series, wscore_models_bundle: dict, not_numerical: list = None) -> pd.Series:
     """
     Compute w-scores for a single subject based on a healthy control model.
 
@@ -41,7 +41,8 @@ def compute_wscores(patient_data : pd.Series, wscore_models_bundle: dict):
             patient_df["scanner"] = "unknown"
 
         # Ensure numeric types where applicable
-        patient_df = patient_df.apply(pd.to_numeric, errors='ignore')
+        cols_to_convert = [c for c in patient_df.columns if c not in not_numerical]
+        patient_df[cols_to_convert] = patient_df[cols_to_convert].apply(pd.to_numeric, errors='coerce')
 
         results = {}
         for roi, bundle in wscore_models_bundle.items():

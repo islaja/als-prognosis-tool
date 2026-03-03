@@ -6,14 +6,14 @@ or full pipeline inputs (features, DBM maps, or T1 images).
 
 Usage examples:
   # dbm-wscores-based 
-  python -m als_sustain.cli.als_sustain_cli run \    
+  python -m als_prognosis.cli.als_prognosis_cli run \    
     --model CALSNIC_sustain_14_reg_dbm_wscore \
     --input_filepath examples/Participant_Inputs_File_features_calsnic.csv \
     --input_type regional_dbm_wscores \
     --outdir tmp/from_dbm_wscores \
 
   # whole brain DBM map mode (DBM paths)
-  python -m als_sustain.cli.als_sustain_cli run \
+  python -m als_prognosis.cli.als_prognosis_cli run \
     --model CALSNIC_sustain_14_reg_dbm_wscore \
     --input_filepath examples/Participant_Inputs_File_features_calsnic_dbm_maps.csv \
     --input_type dbm_maps \
@@ -21,7 +21,7 @@ Usage examples:
     --show_debug_outputs True
 
   # full pipeline mode (T1 paths)
-  python python -m als_sustain.cli.als_sustain_cli run \
+  python python -m als_prognosis.cli.als_prognosis_cli run \
     --model CALSNIC_sustain_14_reg_dbm_wscore \
     --input_filepath examples/Participant_Inputs_File_features_calsnic_t1w_maps.csv \
     --input_type t1w_maps \
@@ -38,7 +38,7 @@ from typing import Dict
 import yaml
 import pandas as pd
 
-from als_sustain.pipeline.run_pipeline import run_batch, load_descriptor
+from als_prognosis.pipeline.run_pipeline import run_batch, load_descriptor
 
 
 def load_resources(root_dir: Path) -> Dict:
@@ -74,7 +74,7 @@ def main():
         - DBM map mode
         - Full T1 pipeline mode
     """
-    # Determine project root (assumes this CLI module is at als_sustain/cli/)
+    # Determine project root (assumes this CLI module is at als_prognosis/cli/)
     root_dir = Path(__file__).resolve().parent.parent.parent
 
     parser = argparse.ArgumentParser(description='ALS SuStaIn multi-model CLI')
@@ -146,7 +146,7 @@ def main():
         # Flatten nested prediction keys and save CSV summary
         results_df = pd.json_normalize(results, sep=".")
         results_df.columns = [
-            c.replace("prediction.", "") for c in results_df.columns
+            c.replace("sustain_inference.", "") for c in results_df.columns
         ]
         results_df.to_csv(outdir / "results_summary.csv", index=False)
 

@@ -1,34 +1,42 @@
 """
-Model loader and inference wrapper for ALS SuStaIn pipeline.
+Model Loader and Subtype and Stage Inference Wrapper for ALS SuStaIn.
 
-This module provides utilities to:
-- Load trained models (pickled with pickle or joblib)
-- Load supplementary model info from pickled metadata
-- Perform inference on a single subject (with internal handling for SuStaIn API requirements)
+This module provides the core utilities for the SuStaIn (Subtype and Stage 
+Inference) component of the ALS prognosis pipeline. It handles the 
+serialization of Bayesian models and the extraction of latent disease 
+subtypes and stages from neuroimaging or clinical features.
 
+Key Capabilities:
+    - Robust model loading (supporting pickle and joblib).
+    - Extraction of Bayesian MCMC samples (the "rules" of disease progression).
+    - Subtype and Stage Identification: Determines where a patient sits on 
+      the disease timeline.
+    - Healthy-Subject Handling: Automatically categorizes subjects at "Stage 0" 
+      as having no specific subtype yet.
 """
+
 import pickle
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import joblib
 
-def load_model(model_path: Path):
+def load_model(model_path: Path) -> Any:
     """
-    Load a trained model from file.
+    Load a trained SuStaIn or Survival model from a serialized file.
 
-    Supports .pkl/.pickle (pickle) or other formats (joblib).
+    Supports standard Python .pkl/.pickle files and joblib formats used for 
+    large numpy-heavy estimators.
 
     Args:
-        model_path (Path): Path to the saved model file
+        model_path (Path): Path to the saved model file.
 
     Returns:
-        Loaded model object
+        Any: The loaded model object (e.g., SuStaIn instance or Coxnet estimator).
 
     Raises:
-        FileNotFoundError: If the model file does not exist
-        Exception: If loading fails
+        FileNotFoundError: If the model file does not exist.
+        RuntimeError: If the file is corrupted or format is unsupported.
     """
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -68,13 +76,13 @@ def load_pickle_info(pickle_path: Path):
     except Exception as e:
         raise ValueError(f"Error loading pickle info from {pickle_path}: {e}")
 
-def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> pd.Series:
+def infer_with_model(model, samples_sequence, samples_f, data: pd.Series) -> pd.Series:
     """
     Run SuStaIn inference on a single subject.
 
     Notes:
     - SuStaIn requires at least two rows, so the function internally duplicates
-      the subject with slight noise. The duplicate is discarded after prediction.
+      the subject with slight noise. The duplicate is discarded after inference.
     - Stage 0 indicates "no subtype"; subtype is set to 0 for these cases.
 
     Args:
@@ -85,11 +93,11 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
         data (pd.Series): Feature vector for a single subject
 
     Returns:
-        pd.Series: Prediction results including:
-            - ml_subtype: assigned subtype (categorical)
-            - ml_stage: assigned stage (Int64)
-            - prob_ml_subtype: probability of assigned subtype
-            - prob_ml_stage: probability of assigned stage
+        pd.Series: Inference results including:
+            - inferred_subtype: assigned subtype (categorical)
+            - inferred_stage: assigned stage (Int64)
+            - prob_inferred_subtype: probability of assigned subtype
+            - prob_inferred_stage: probability of assigned stage
             - prob_sN: probability for each subtype N
 
     Raises:
@@ -115,25 +123,25 @@ def predict_with_model(model, samples_sequence, samples_f, data: pd.Series) -> p
                                                                     N_samples)
 
     # Collect outputs into DataFrame
-    output_data['ml_subtype'] = ml_subtype
-    output_data['prob_ml_subtype'] = prob_ml_subtype
-    output_data['ml_stage'] = ml_stage
-    output_data['prob_ml_stage'] = prob_ml_stage
+    output_data['inferred_subtype'] = ml_subtype
+    output_data['prob_inferred_subtype'] = prob_ml_subtype
+    output_data['inferred_stage'] = ml_stage
+    output_data['prob_inferred_stage'] = prob_ml_stage
 
     # Make current subtypes (0, 1, 2) -> (1, 2, 3) instead
-    output_data['ml_subtype'] = (output_data['ml_subtype'].astype("Int64") + 1)
+    output_data['inferred_subtype'] = (output_data['inferred_subtype'].astype("Int64") + 1)
 
     # Adjust subtype for stage 0
-    stage0_mask = output_data['ml_stage'] == 0
-    output_data.loc[stage0_mask, 'ml_subtype'] = 0
+    stage0_mask = output_data['inferred_stage'] == 0
+    output_data.loc[stage0_mask, 'inferred_subtype'] = 0
     # Invalidate subtype probability for stage 0
-    output_data.loc[stage0_mask, 'prob_ml_subtype'] = 0.0
-    output_data['ml_stage'] =  output_data['ml_stage'].astype('Int64')
+    output_data.loc[stage0_mask, 'prob_inferred_subtype'] = 0.0
+    output_data['inferred_stage'] =  output_data['inferred_stage'].astype('Int64')
 
-    # Make ml_subtype categorical
-    col_values = output_data['ml_subtype']
+    # Make inferred_subtype categorical
+    col_values = output_data['inferred_subtype']
     categories = sorted(pd.Series(col_values.dropna().unique()))
-    output_data['ml_subtype'] = pd.Categorical(
+    output_data['inferred_subtype'] = pd.Categorical(
                 col_values,
                 categories=categories,
                 ordered=False
