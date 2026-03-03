@@ -99,13 +99,11 @@ def infer_with_model(
 
     # Initialize results container
     output_data = pd.DataFrame(index=[0, 1])
-    output_data['inferred_subtype'] = ml_subtype
+    # Shift subtype indexing from 0-based to 1-based 
+    output_data['inferred_subtype'] = (ml_subtype.astype("int") + 1)
     output_data['prob_inferred_subtype'] = prob_ml_subtype
-    output_data['inferred_stage'] = ml_stage.astype('Int64')
+    output_data['inferred_stage'] = ml_stage.astype("int")
     output_data['prob_inferred_stage'] = prob_ml_stage
-
-    # Shift subtype indexing from 0-based to 1-based (Clinical standard)
-    output_data['inferred_subtype'] = (output_data['inferred_subtype'].astype("Int64") + 1)
 
     # Normalization for Stage 0 (Healthy/Control-like)
     stage0_mask = output_data['inferred_stage'] == 0
