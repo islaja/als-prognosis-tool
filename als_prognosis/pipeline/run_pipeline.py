@@ -49,7 +49,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
-import warnings
+
+from als_prognosis.config import COLUMN_MAPPING
 
 from als_prognosis.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
 
@@ -97,10 +98,12 @@ def ensure_subject_outdir_step(context: Dict) -> Dict:
     Raises:
         None explicitly
     """
-    row = context["row"]
     outdir = context["outdir"]
-    pid = row["ID"]
-    visit = row["Visit"]
+    
+    cols_mapping = context["cols_mapping"]
+    row = context["row"]
+    pid = row[cols_mapping["id"]]
+    visit = row[cols_mapping["visit"]]
     subject_outdir = Path(outdir / f"{pid}_{visit}".replace(" ", "_")).resolve()
     subject_outdir.mkdir(parents=True, exist_ok=True)
 
@@ -272,8 +275,9 @@ def make_roi_extraction_step(cfg: Dict):
             input_maps_path = maps_nifti_path
 
         row = context["row"]
-        metadata = pd.Series({"ID": row["ID"], "Visit": row["Visit"]})
-        logger.debug(f"Extracting ROI means for subject {row['ID']} visit {row['Visit']} using atlases {atlases}")
+        cols_mapping = context["cols_mapping"]
+        metadata = pd.Series({"ID": row[cols_mapping["id"]], "Visit": row[cols_mapping["visit"]]})
+        logger.debug(f"Extracting ROI means for subject {row[cols_mapping['id']]} visit {row[cols_mapping['visit']]} using atlases {atlases}")
         
         resources = context.get("resources", {})
         
@@ -359,11 +363,13 @@ def make_wscore_step(cfg: Dict):
         
         # Extract patient metadata from the dictionary into a Series
         row = context["row"]
+        cols_mapping = context["cols_mapping"]
+
         metadata = pd.Series({
-            "filename": row["ID"],
-            "age": row["Age"],
-            "sex": row["Sex"],
-            "scanner": row["Scanner"]
+            "filename": row[cols_mapping["id"]],
+            "age": row[cols_mapping["age"]],
+            "sex": row[cols_mapping["sex"]],
+            "scanner": row[cols_mapping["scanner"]]
         })
         not_numerical = ["filename", "sex", "scanner"]
 
@@ -538,6 +544,7 @@ def make_survival_predict_step(step_cfg: Dict):
 
         desc = context["desc"]
         subject_info = context["row"]
+        cols_mapping = context["cols_mapping"]
         data = context.get("features")
         
         if data is None:
@@ -546,10 +553,10 @@ def make_survival_predict_step(step_cfg: Dict):
         for feature in features_list:
             if feature not in data.index:
                 # look in sujbect_info as well for clinical or demographic features
-                if feature in subject_info:
+                if feature in subject_info and subject_info[feature] and pd.notna(subject_info[feature]):
                     data[feature] = subject_info[feature]
                 else:
-                    warnings.warn(f"Missing '{feature}': Skipping survival prediction.", UserWarning)
+                    logger.warning(f"⚠️  Subject {subject_info[cols_mapping['id']]}: Missing clinical feature '{feature}'. Skipping survival prediction.")
                     context["survival_prediction"] = None
                     return context
 
@@ -572,7 +579,7 @@ def make_survival_predict_step(step_cfg: Dict):
         patient_mean_curve_result = infer_curves_from_bootstrap_models(data, bootstrap_models, common_times)
         patient_subtype = data['inferred_subtype']
 
-        title_suffix = f"{subject_info['ID']}\n Inferred Subtype: {int(patient_subtype)}, Stage: {int(data['inferred_stage'])}"
+        title_suffix = f"{subject_info[cols_mapping['id']]}\n Inferred Subtype: {int(patient_subtype)}, Stage: {int(data['inferred_stage'])}"
         fig, ax = plot_coxnet_prediction_over_references(
             patient_mean_curve_result, 
             reference_library, 
@@ -631,7 +638,7 @@ def run_for_row(
         ValueError: If input file type is invalid or features are missing
     """
 
-    input_path = Path(row["Path"].strip()).resolve()  
+    input_path = Path(row[COLUMN_MAPPING["path"]].strip()).resolve()  
 
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -656,6 +663,7 @@ def run_for_row(
         "resources": resources,
         "pelican_cfg": pelican_cfg,
         "debug_dir": debug_dir,
+        "cols_mapping": COLUMN_MAPPING,
     } 
 
     # create subject output directory
@@ -674,13 +682,60 @@ def run_for_row(
         context = step(context)
 
     result = {
-        "ID": row["ID"],
-        "Visit": row["Visit"],
+        "ID": row[COLUMN_MAPPING['id']],
+        "Visit": row[COLUMN_MAPPING['visit']],
+        "DPR": row[COLUMN_MAPPING['dpr']],
         "model_id": model_id,
         "sustain_inference": context.get("sustain_inference"),
         "predicted_median_survival_time(months)": context.get("median_survival_time"),
     }
     return result
+
+
+def compute_progression_rate(df: pd.DataFrame, cols: Dict = COLUMN_MAPPING) -> pd.DataFrame:
+    """
+    Computes the progression rate (DPR) for all rows where it is missing,
+    but the necessary components (ALSFRS and duration) are present.
+    
+    Formula: DPR = (48 - ALSFRS) / symptom_duration
+    """
+    # Create a copy to avoid SettingWithCopyWarning
+    df = df.copy()
+
+    # Identify the specific column names from your mapping
+    id_col = cols.get("id")
+    dpr_col = cols.get("dpr")
+    alsfrs_col = cols.get("alsfrs")
+    dur_col = cols.get("duration")
+
+    # Create a mask for rows where:
+    # 1. DPR is missing
+    # 2. ALSFRS and Duration are NOT missing
+    # 3. Duration is greater than 0 (to avoid division by zero)
+    mask = (
+        df[dpr_col].isna() & 
+        df[alsfrs_col].notna() & 
+        df[dur_col].notna() & 
+        (df[dur_col] > 0)
+    )
+
+    # Apply the vectorized calculation only to those rows
+    if mask.any():
+        count = mask.sum()
+        df.loc[mask, dpr_col] = (48 - df.loc[mask, alsfrs_col]) / df.loc[mask, dur_col]
+    
+    # Identify rows that are STILL missing DPR (Incomplete data)
+    still_missing_mask = df[dpr_col].isna()
+    
+    if still_missing_mask.any():
+        missing_ids = df.loc[still_missing_mask, id_col].tolist()
+        logger.warning(f"⚠️  WARNING: The following Subject IDs are still missing '{dpr_col}' "
+              f"due to incomplete '{alsfrs_col}' or '{dur_col}':")
+        logger.warning(f"   {', '.join(map(str, missing_ids))}")
+        logger.warning("   (Survival prediction for these subjects will be skipped later in the pipeline.)\n")
+
+    return df
+
 
 def run_batch(
         *, 
@@ -712,7 +767,12 @@ def run_batch(
         ValueError: If CSV or data are invalid
     """
 
-    df = pd.read_csv(input_csv)
+    raw_data_df = pd.read_csv(input_csv)
+    #df = pd.read_csv(input_csv)
+
+    # If progression rate (DPR) is not provided, but symptom duration and alsfrs are, compute it. 
+    df = compute_progression_rate(raw_data_df)
+
     desc = load_descriptor(model_id=model_id, root_dir=root_dir)
     steps, pelican_needed = build_steps_from_processing_chain(desc, input_type)
 
