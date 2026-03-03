@@ -9,18 +9,24 @@
 # -----------------------------------------------------------------------------
 
 version: "1.0.0"
-display_name: ALS SuStaIn (14 pre-selected regional DBM W-scores)
+display_name: ALS SuStaIn (14 ROI DBM W-scores) + Survival Ensemble ('dpr' + sustain subtype and stage interaction term)
 
-model_metadata:
-  # Unique model identifier
-  model_id: CALSNIC_sustain_14_reg_dbm_wscore
-  # Type of SuStaIn model
-  sustain_type: zscore
-  # Final input expected by the model
-  input_accepted: regional_dbm_wscores_subset_inverted
-  # Model artifact paths (relative to project root)
-  model_file: models/CALSNIC_sustain_14_reg_dbm_wscore.joblib
-  model_meta_file: models/CALSNIC_sustain_14_reg_dbm_wscore.pickle
+# --- MODELS METADATA ---
+models:
+  sustain_model:
+    model_id: CALSNIC_sustain_14_reg_dbm_wscore
+    model_type: zscore
+    model_nb_subtype: 3
+    model_file: models/sustain/CALSNIC_sustain_14_reg_dbm_wscore.joblib
+    model_meta_file: models/sustain/CALSNIC_sustain_14_reg_dbm_wscore.pickle
+  
+  survival_ensemble_model:
+    model_id: CALSNIC_coxnet_bootstrap_ensemble
+    model_type: coxnet_bootstrap_100
+    model_file: models/coxnet/CALSNIC_coxnet_dprAndSustainInteractionfeatures_bootstrap_ensemble_model.joblib
+    reference_library: models/coxnet/CALSNIC_coxnet_dprAndSustainInteractionfeatures_bootstrap_references_curves.joblib
+    # Explicitly list non-sustain features (like DPR) needed for Coxnet
+    clinical_features: [dpr]
 
 # Accepted inputs for pipeline execution
 processing_input_accepted:
@@ -53,15 +59,14 @@ processing_chain:
     input_accepted: [regional_dbm]
     output_type: regional_dbm_wscores
     # Healthy control cohort reference for W-score computation
-    model_artifact: models/CALSNIC_wscore_hc_cohort.joblib
+    model_artifact: models/hc_lme/CALSNIC_wscore_hc_cohort.joblib
 
-  - step: feature_selection
+  - step: sustain_inference
     input_accepted: [regional_dbm_wscores]
-    output_type: regional_dbm_wscores_subset
-    # TRAINING-TIME CONSTRAINT:
+    output_type: sustain_assignments # ml_subtype, ml_stage and (onehot_subtype x stage) interaction terms
     # Exact list and order of features used during training
     # Changing these without retraining invalidates the model
-    selected_list:
+    regions_list:
       - dbm_cerebra_w_precentral
       - dbm_cerebra_w_paracentral
       - dbm_jhu25_w_corticospinal_tract
@@ -76,15 +81,19 @@ processing_chain:
       - dbm_cerebra_w_hippocampus
       - dbm_cerebra_w_entorhinal
       - dbm_cerebra_w_parahippocampal
+    # Logic: Flip to have positive as "presence" of pathology
+    standardize_to_positive_pathology: true
+    # None are excluded as each region in the list is expected to be atrophied (or stable) in ALS
+    exclude_from_inversion: []
 
-  - step: feature_inversion
-    input_accepted: [regional_dbm_wscores_subset]
-    output_type: regional_dbm_wscores_subset_inverted
-    # Inversion rationale:
-    # Features correspond to regions expected to atrophy in ALS.
-    # Inversion ensures higher values indicate more severe pathology.
-    invert_all: true
-    invert_specific_features_list: []
+  - step: survival_prediction
+    input_accepted: [sustain_assignments]
+    output_type: survival_mean_curve_info
+    # DPR (disease progression rate) + (onehot_subtype x stage) interaction terms are the features used for Coxnet prediction
+    features_list: ['dpr', 'S1_x_stage', 'S2_x_stage', 'S3_x_stage'] 
+    period_window: 60 # Number of months to predict survival over (e.g., 5 years)
+    #Result: Mean curve + 95% CI (via the bootstrap ensemble)
+    prediction_type: bootstrap_ensemble_inference
 
 notes: >
   Steps are executed based on input type, ensuring reproducibility of training-time feature representation.
