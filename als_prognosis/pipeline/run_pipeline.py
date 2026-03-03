@@ -435,7 +435,7 @@ def make_sustain_inference_step(step_cfg: Dict):
                 f"Accepted: {input_accepted}"
             )
         
-        from als_prognosis.progression.predict import load_model, load_pickle_info, infer_with_model
+        from als_prognosis.progression.predict import load_pickle_info, infer_with_model
     
         desc = context["desc"]
         data = context.get("features")
@@ -470,7 +470,7 @@ def make_sustain_inference_step(step_cfg: Dict):
             raise ValueError(f"Sustain model file specified in descriptor not found: {model_file}")
         
         # Load the model and meta-info, then run prediction
-        model = load_model(model_file)
+        model = joblib.load(model_file)
         samples_sequence, samples_f = load_pickle_info(meta_file)
         inference = infer_with_model(model, samples_sequence, samples_f, data)
 
