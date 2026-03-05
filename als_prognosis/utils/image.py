@@ -13,6 +13,9 @@ import subprocess
 import gzip
 import shutil
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 def minc2nii(input_path:Path, output_path:Path):
     """
@@ -46,7 +49,18 @@ def minc2nii(input_path:Path, output_path:Path):
         output_tmp = output_path.with_suffix('')
     else:
         output_tmp = output_path
-    subprocess.run(["mnc2nii", "-float", "-nii", input_path, output_tmp], check=True)
+    try:
+        subprocess.run(
+            ["mnc2nii", "-float", "-nii", str(input_path), str(output_tmp)], 
+            check=True,
+            stdout=subprocess.DEVNULL,  
+            stderr=None                 
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"❌ mnc2nii failed! Command returned exit code {e.returncode}")
+        if e.stderr:
+            logger.error(f"Details: {e.stderr.strip()}")
+        raise e
 
     # Compress if requested
     if '.gz' in output_path.suffixes:
@@ -91,7 +105,18 @@ def nii2minc(input_path:Path, output_path:Path):
         input_tmp = input_path
 
     # Convert to MINC
-    subprocess.run(["nii2mnc", "-float", input_tmp, output_path], check=True)
+    try:
+        subprocess.run(["nii2mnc", "-float", str(input_tmp), str(output_path)], 
+            check=True,
+            stdout=subprocess.DEVNULL,  
+            stderr=subprocess.DEVNULL,               
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"❌ nii2mnc failed! Command returned exit code {e.returncode}")
+        if e.stderr:
+            logger.error(f"Details: {e.stderr.strip()}")
+        raise e
+
     # Clean up temporary file if created
     if '.gz' in input_path.suffixes:
         Path(input_tmp).unlink()    

@@ -39,8 +39,7 @@ Notes:
 """
 
 
-import logging
-#from multiprocessing import context ## TODO check if this is needed or if it conflicts with the context dict we are using for pipeline steps
+
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -54,8 +53,8 @@ from als_prognosis.config import COLUMN_MAPPING
 
 from als_prognosis.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
 
+import logging
 logger = logging.getLogger(__name__)
-
 
 def load_descriptor(*, model_id: str, root_dir: Path) -> Dict:
     """
@@ -95,8 +94,6 @@ def ensure_subject_outdir_step(context: Dict) -> Dict:
     Returns:
         Dict: Updated context with 'subject_outdir'
 
-    Raises:
-        None explicitly
     """
     outdir = context["outdir"]
     
@@ -184,8 +181,9 @@ def make_run_pelican_step(dfg: Dict):
                 f"Accepted: {input_accepted}"
             )
 
-        subject_ID = context["row"]["ID"]
-        visit = context["row"]["Visit"]
+        cols_mapping = context["cols_mapping"]
+        subject_ID = context["row"][cols_mapping['id']]
+        visit = context["row"][cols_mapping['visit']]
         subject_outdir = context["subject_outdir"]
         t1_path = context["input_path"]
         
@@ -194,6 +192,7 @@ def make_run_pelican_step(dfg: Dict):
             from als_prognosis.utils.image import nii2minc
             t1_path_suffix = "".join(t1_path.suffixes)
             t1_mnc_path = Path(context["subject_outdir"] / t1_path.name.replace(t1_path_suffix, ".mnc")).resolve()
+
             if not t1_mnc_path.exists():
                 nii2minc(t1_path, t1_mnc_path)
             t1_path = t1_mnc_path
@@ -208,18 +207,21 @@ def make_run_pelican_step(dfg: Dict):
             pelican_output_path, 
             context.get("pelican_cfg"),
         )
-        # Create a single string with each path on a new line
-        paths_string = "\n".join(str(p) for p in dbm_file_paths)
-        print(f"DBM map(s) created at:\n{paths_string}")
-
         # For now the current pipeline is treating one visit at a time, so one output.
         # TODO handle multiple visits per subject.
         dbm_file_path = dbm_file_paths[0]
         
+        # Create a single string with each path on a new line
+        #output_path = "\n".join(str(p) for p in dbm_file_paths)
+        display_path = f"{dbm_file_path.parent.name}/{dbm_file_path.name}"
+        logger.info(f"     ↳ 📊 Saving : {display_path}")
+   
         context["input_path"] = dbm_file_path
         context["current_type"] = output_type
         
         return context
+    # Manually tag the internal function with a readable name
+    step.__name__ = "DBM Generation"
     return step
 
 def make_roi_extraction_step(cfg: Dict):
@@ -277,7 +279,7 @@ def make_roi_extraction_step(cfg: Dict):
         row = context["row"]
         cols_mapping = context["cols_mapping"]
         metadata = pd.Series({"ID": row[cols_mapping["id"]], "Visit": row[cols_mapping["visit"]]})
-        logger.debug(f"Extracting ROI means for subject {row[cols_mapping['id']]} visit {row[cols_mapping['visit']]} using atlases {atlases}")
+        logger.debug(f"Extracting ROI means for subject {row[cols_mapping['id']]} visit {row[cols_mapping['visit']]} using atlases {atlases}.\n")
         
         resources = context.get("resources", {})
         
@@ -298,6 +300,8 @@ def make_roi_extraction_step(cfg: Dict):
         context["features"] = combined_atlas_roi_vals
         context["current_type"] = output_type
         return context
+    # Manually tag the internal function with a readable name
+    step.__name__ = "ROI Extraction"
     return step
 
 def make_wscore_step(cfg: Dict):
@@ -353,7 +357,6 @@ def make_wscore_step(cfg: Dict):
         root_dir = Path(context["root_dir"])
 
         if "bundle" not in cache:
-            print("Loading wscore models bundle for the first time...")
             model_path = (root_dir / model_artifact).resolve()
             with open(model_path, "rb") as f:
                 cache["bundle"] = joblib.load(f)
@@ -386,13 +389,16 @@ def make_wscore_step(cfg: Dict):
             lambda x: round(x, 3) if isinstance(x, (int, float)) else x
         )
         # Now transpose and save
-        logger.debug(f"Saving ROI wscores to {csv_path}")
+        display_path = f"{csv_path.parent.name}/{csv_path.name}"
+        logger.info(f"     ↳ 📊 Saving : {display_path}")
         patient_ws_to_save.to_frame().T.to_csv(csv_path, index=False)
         
         context["features"] = ws
         context["current_type"] = output_type
 
         return context
+    # Manually tag the internal function with a readable name
+    step.__name__ = "W-Score Computation"
     return step
 
 
@@ -492,6 +498,8 @@ def make_sustain_inference_step(step_cfg: Dict):
         context["current_type"] = output_type
         
         return context
+    # Manually tag the internal function with a readable name
+    step.__name__ = "Stage and Subtype Inference"
     return step
 
 
@@ -556,7 +564,7 @@ def make_survival_predict_step(step_cfg: Dict):
                 if feature in subject_info and subject_info[feature] and pd.notna(subject_info[feature]):
                     data[feature] = subject_info[feature]
                 else:
-                    logger.warning(f"⚠️  Subject {subject_info[cols_mapping['id']]}: Missing clinical feature '{feature}'. Skipping survival prediction.")
+                    logger.warning(f"     ⚠️  Subject {subject_info[cols_mapping['id']]}: Missing clinical feature '{feature}'. Skipping survival prediction.")
                     context["survival_prediction"] = None
                     return context
 
@@ -567,9 +575,9 @@ def make_survival_predict_step(step_cfg: Dict):
         model_references_file = (context["root_dir"] / Path(model_references_file_rel)).resolve()
         
         if not model_ensemble_file.exists():
-            raise ValueError(f"Coxnet model ensemble file in descriptor not found: {model_ensemble_file}")
+            raise ValueError(f"❌  Coxnet model ensemble file in descriptor not found: {model_ensemble_file}")
         if not model_references_file.exists():
-            raise ValueError(f"References library file in descriptor not found: {model_references_file}")
+            raise ValueError(f"❌  References library file in descriptor not found: {model_references_file}")
         
         bootstrap_models = joblib.load(model_ensemble_file)
         reference_library = joblib.load(model_references_file)
@@ -587,19 +595,27 @@ def make_survival_predict_step(step_cfg: Dict):
             title_suffix=title_suffix,
         )
         fig.show(False)
-        fig.savefig(subject_outdir / f"prognosis.png", dpi=300, bbox_inches='tight')
+        output_path = subject_outdir / f"prognosis.png"
+        display_path = f"{output_path.parent.name}/{output_path.name}"
+        logger.info(f"     ↳ 📊 Saving : {display_path}")
+        fig.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close('all')
 
+        output_path = subject_outdir / "predicted_survival_curve.csv"
+        display_path = f"{output_path.parent.name}/{output_path.name}"
+        logger.info(f"     ↳ 📊 Saving : {display_path}")
         pd.DataFrame({
             'time_in_months': common_times, 
             'survival_probability': patient_mean_curve_result['mean']
-        }).to_csv(subject_outdir / "predicted_survival_curve.csv", index=False)
-        
+        }).to_csv(output_path, index=False)
+       
         context["median_survival_time"] = np.round(patient_mean_curve_result['median_survival_time'], 1).item()
         context["features"] = patient_mean_curve_result
         context["current_type"] = output_type
         
         return context
+    # Manually tag the internal function with a readable name
+    step.__name__ = "Survival Prediction"
     return step
 
 
@@ -638,20 +654,26 @@ def run_for_row(
         ValueError: If input file type is invalid or features are missing
     """
 
+    logger.info(f"\n--- Starting Pipeline for Subject: {row[COLUMN_MAPPING['id']]} {row[COLUMN_MAPPING['visit']]} ---")
+
     input_path = Path(row[COLUMN_MAPPING["path"]].strip()).resolve()  
 
     if not input_path.exists():
-        raise FileNotFoundError(f"Input file not found: {input_path}")
+        logger.error(f"\n   ❌ Input file not found: {input_path}")
+        return None
     
     input_suffixes = input_path.suffixes
     if 'maps' in input_type:
         # make sure the input is either a .nii/.nii.gz/.mnc file
         if not any(suf in input_suffixes for suf in ['.nii', '.nii.gz', '.mnc']):
-            raise ValueError(f"Input path for input_type '{input_type}' must be a .nii/.nii.gz/.mnc file")
+            logger.error(f"\n   ❌ Input path for input_type '{input_type}' must be a .nii/.nii.gz/.mnc file")
+            return None
+    
     else: # tabular input_type, expecting a .csv file
         if '.csv' not in input_suffixes:
-            raise ValueError(f"Input path for input_type '{input_type}' must be a .csv file")
-        
+            logger.error(f"\n   ❌ Input path for input_type '{input_type}' must be a .csv file")
+            return None
+
     context = {
         "row": row,
         "current_type": input_type,
@@ -673,22 +695,37 @@ def run_for_row(
     if '.csv' in input_suffixes:
         data = pd.read_csv(input_path)
         if data.shape[0] != 1:
-            raise ValueError("Input features CSV must have exactly one row")
+            logger.error(f"\n   ❌ Input features CSV must have exactly one row")
+            return None
+        
         # pick first row and convert to Series
         data = data.iloc[0].squeeze() 
         context["features"] = data
  
-    for step in steps:
-        context = step(context)
+    for i, step_func in enumerate(steps, 1):
+        # Dynamically get the step name
+        step_name = step_func.__name__
+        
+        # Log the progress
+        logger.info(f"\n  Step {i}/{len(steps)}: {step_name} ...")
+        try:
+            context = step_func(context)
+        except Exception as e:
+            # If a step fails, log it as an ERROR and include the ID
+            logger.error(f"\n   ❌ Failed at {step_name} for Subject {row[COLUMN_MAPPING['id']]}: {str(e)}")
+            return None
+        
+    logger.info(f"\n   ✅ Successfully completed all steps for {row[COLUMN_MAPPING['id']]}.")
 
     result = {
         "ID": row[COLUMN_MAPPING['id']],
         "Visit": row[COLUMN_MAPPING['visit']],
-        "DPR": row[COLUMN_MAPPING['dpr']],
+        "DPR": float(np.round(row[COLUMN_MAPPING['dpr']], 2)) if pd.notna(row.get(COLUMN_MAPPING['dpr'])) else None,
         "model_id": model_id,
-        "sustain_inference": context.get("sustain_inference"),
-        "predicted_median_survival_time(months)": context.get("median_survival_time"),
+        "sustain_inference": context.get("sustain_inference", None),
+        "predicted_median_survival_time(months)": context.get("median_survival_time", None),
     }
+
     return result
 
 
@@ -729,10 +766,10 @@ def compute_progression_rate(df: pd.DataFrame, cols: Dict = COLUMN_MAPPING) -> p
     
     if still_missing_mask.any():
         missing_ids = df.loc[still_missing_mask, id_col].tolist()
-        logger.warning(f"⚠️  WARNING: The following Subject IDs are still missing '{dpr_col}' "
+        logger.warning(f"\n⚠️  WARNING: The following Subject IDs are still missing '{dpr_col}' "
               f"due to incomplete '{alsfrs_col}' or '{dur_col}':")
         logger.warning(f"   {', '.join(map(str, missing_ids))}")
-        logger.warning("   (Survival prediction for these subjects will be skipped later in the pipeline.)\n")
+        logger.warning("   (Survival prediction for these subjects will be skipped later in the pipeline.)")
 
     return df
 
@@ -794,5 +831,11 @@ def run_batch(
             pelican_cfg=pelican_cfg,
             debug_dir=debug_dir,
             )
-        results.append(r)
+        
+        # Only add to results if the pipeline actually finished
+        if r is not None:
+            results.append(r)
+        else:
+            logger.warning(f"\n   ⚠️  Skipping Subject {row.get(COLUMN_MAPPING['id'])} in final summary due to previous errors.")
+
     return results

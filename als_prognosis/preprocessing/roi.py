@@ -11,7 +11,6 @@ flexible pipeline integration. Debug outputs can optionally be written for inter
 """
 
 from pathlib import Path
-import os
 import logging
 import re
 from typing import Dict, List
@@ -166,7 +165,7 @@ def compute_roi_all_atlas(atlases_name: List[str],
     # Load brain mask 
     brain_mask_path = (root_dir / img_resources["paths"]["template"]["brain_mask"]).resolve()
     brain_mask = nib.load(brain_mask_path).get_fdata().astype(bool)
-    
+
     # If remove_sulci, load CSF prob mask and allen_atlas to get ventricles
     if remove_sulci:
         if csf_threshold == None:
@@ -177,8 +176,9 @@ def compute_roi_all_atlas(atlases_name: List[str],
         
         # Create the mask of non_sulci 
         csf_prob_file = (root_dir / img_resources["paths"]["template"]["csf_prob"]).resolve()
+        
         csf_img = nib.load(csf_prob_file).get_fdata()
-
+        
         # Use Allen atlas to retrive the ventricular
         allen_atlas_path = (root_dir / img_resources["paths"]["atlases"]["allen"]).resolve()
         allen_atlas_img = nib.load(allen_atlas_path)
@@ -196,8 +196,6 @@ def compute_roi_all_atlas(atlases_name: List[str],
     all_atlas_roi_vals = []
     combined_atlas_roi_vals = pd.Series(dtype=float)  # Initialize as empty Series
     for atlas_name in atlases_name:
-        print(f"--------- Processing atlas: {atlas_name} ----------")
-    
         # Prepare atlas
         atlas_path =  (root_dir / img_resources["paths"]["atlases"][atlas_name]).resolve()
         atlas_img = nib.load(atlas_path)
@@ -238,6 +236,8 @@ def compute_roi_all_atlas(atlases_name: List[str],
                 lambda x: round(x, 3) if isinstance(x, (int, float)) else x
             )
             # Now transpose and save
+            display_path = f"{csv_path.parent.name}/{csv_path.name}"
+            logger.info(f"     ↳ 📊 Saving : {display_path}")
             rounded_vals.to_frame().T.to_csv(csv_path, index=False)
         else:
             meta_and_atlas_roi = pd.read_csv(csv_path).iloc[0]
@@ -255,6 +255,8 @@ def compute_roi_all_atlas(atlases_name: List[str],
         lambda x: round(x, 3) if isinstance(x, (int, float)) else x
     )
     # Now transpose and save
+    display_path = f"{csv_path.parent.name}/{csv_path.name}"
+    logger.info(f"     ↳ 📊 Saving : {display_path}")
     rounded_vals.to_frame().T.to_csv(csv_path, index=False)
 
     # Make columns' name lower case, except for those that turns out to be the same when lowered.

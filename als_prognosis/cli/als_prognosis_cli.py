@@ -40,6 +40,33 @@ import pandas as pd
 
 from als_prognosis.pipeline.run_pipeline import run_batch, load_descriptor
 
+import logging
+import sys
+
+def setup_initial_logging():
+    """ Console only """
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    
+    # Clean terminal output
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(logging.Formatter('%(message)s'))
+    root.addHandler(console)
+    
+    # Mute noisy libraries
+    logging.getLogger('nibabel').setLevel(logging.ERROR)
+
+
+def add_file_logging(outdir: Path):
+    """ Attach file logging once outdir is known """
+    log_path = outdir / "pipeline.log"
+    
+    file_handler = logging.FileHandler(log_path, mode='w')
+    file_handler.setFormatter(logging.Formatter('%(message)s'))
+    
+    logging.getLogger().addHandler(file_handler)
+    return log_path
+
 
 def load_resources(root_dir: Path) -> Dict:
     """
@@ -74,6 +101,10 @@ def main():
         - DBM map mode
         - Full T1 pipeline mode
     """
+    # Start console logging
+    setup_initial_logging()
+    logger = logging.getLogger(__name__)
+
     # Determine project root (assumes this CLI module is at als_prognosis/cli/)
     root_dir = Path(__file__).resolve().parent.parent.parent
 
@@ -109,6 +140,11 @@ def main():
         outdir = args.outdir.resolve()
         outdir.mkdir(parents=True, exist_ok=True)
 
+        # Enable file logging
+        log_file = add_file_logging(outdir)
+        display_path = f"{log_file.parent.name}/{log_file.name}"  
+        logger.info(f"\n📄 Log is being saved to: {display_path}")
+
         # Create debug output directory if requested
         if args.show_debug_outputs:
             debug_dir = outdir / "debug_outputs"
@@ -140,15 +176,18 @@ def main():
         )
 
         # Print YAML summary
-        print('--- Summary ---')
-        print(yaml.safe_dump(results, sort_keys=False))
+        #print('--- Summary ---')
+        #print(yaml.safe_dump(results, sort_keys=False))
         
         # Flatten nested prediction keys and save CSV summary
         results_df = pd.json_normalize(results, sep=".")
         results_df.columns = [
             c.replace("sustain_inference.", "") for c in results_df.columns
         ]
-        results_df.to_csv(outdir / "results_summary.csv", index=False)
+        summary_path = outdir / "results_summary.csv"
+        display_path = f"{summary_path.parent.name}/{summary_path.name}"
+        logger.info(f"\n📊 Summary of inference and prediction found at: {display_path}\n")
+        results_df.to_csv(summary_path, index=False)
 
 if __name__ == '__main__':
     main()

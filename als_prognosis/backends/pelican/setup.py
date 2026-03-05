@@ -1,4 +1,4 @@
-# als_sustain/backends/pelican/setup.py
+# als_prognosis/backends/pelican/setup.py
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Optional, Dict
 import requests
 from tqdm import tqdm
+
+import logging
+logger = logging.getLogger(__name__)
 
 # -------------------------
 # Configuration defaults
@@ -85,12 +88,9 @@ def _default_base_dir() -> Path:
     Returns:
         Path: The resolved absolute path to the Pelican base directory.
     """
-    env = os.environ.get("ALS_SUSTAIN_PELICAN_DIR")
-    if env:
-        return Path(env).resolve()
     # XDG fallback
     xdg_cache = os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
-    return Path(xdg_cache) / "als_sustain" / "pelican"
+    return Path(xdg_cache) / "als_prognosis" / "pelican"
 
 
 def _grant_execution_permissions(directory: Path):
@@ -153,7 +153,7 @@ def _download_file(*, url: str, destination: Path, label: str) -> None:
         destination (Path): The local path where the file should be saved.
         label (str): A descriptive name used for console logging.
     """
-    print(f"[↓] Downloading {label}")
+    logger.info(f"     ↳ 📥 Downloading {label}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     # stream=True allows us to iterate over the chunks of the file
     response = requests.get(url, stream=True)
@@ -168,7 +168,7 @@ def _download_file(*, url: str, destination: Path, label: str) -> None:
             total=total_size, 
             unit='iB', 
             unit_scale=True, 
-            desc=f"[↓] {label}",
+            desc=f"📥 {label}",
             leave=True
         ) as pbar:
             for data in response.iter_content(block_size):
@@ -184,9 +184,9 @@ def _extract_zip(zip_path: Path, target_dir: Path, label: str) -> None:
         zip_path (Path): Path to the source compressed file.
         target_dir (Path): Directory where contents should be extracted.
     """
-    print(f"[⛏] Extracting {label} ...")
+    logger.info(f"     ↳ 📦 Extracting {label} ...") 
     subprocess.run(["unzip", "-q", str(zip_path), "-d", str(target_dir)], check=True)
-    print(f"{label} successfully extracted.")
+    logger.info(f"     ↳ {label} successfully extracted.")
     
 def _get_pelican_python_bin() -> str:
     """

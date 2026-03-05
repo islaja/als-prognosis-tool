@@ -1,12 +1,14 @@
-# als_sustain/backends/pelican/run.py
+# als_prognosis/backends/pelican/run.py
 
 from __future__ import annotations
-import os
 import subprocess
 from pathlib import Path
 from typing import Optional, Union, List
 
-from als_sustain.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
+from als_prognosis.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
+from tqdm import tqdm
+import logging
+logger = logging.getLogger(__name__)
 
 # Get the directory where THIS file (executor.py) is located
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -59,6 +61,7 @@ def run_pelican(
 
     should_compute_dbm = False
     dbm_file_paths = []
+
     # Make a simple CSV file Pelican expects
     processing_list_path = output_dir / "subject_visit.csv"
     with processing_list_path.open("w") as processing_list_file:
@@ -77,14 +80,23 @@ def run_pelican(
                 should_compute_dbm = True
     
     if should_compute_dbm:
+        APPROXIMATED_NB_LINES = 6000  
+        update_interval = APPROXIMATED_NB_LINES // 100  # Update every 1%
+        line_count = 0
+        current_pbar_val = 0
+
         log_file_path = output_dir / "pelican.log"
+        display_path = f"{log_file_path.parent.name}/{log_file_path.name}"
         # Prepare to run pelican
         pelican_args = [str(processing_list_path), str(pelican_cfg.models_dir), str(output_dir)]
         command = ["bash", str(PELICAN_SCRIPT_PATH)] + pelican_args
-        print(f"Running Pelican on subject {subject_id}...")
         try:
             with open(log_file_path, "w") as log_file:
-                print(f"Logging Pelican output to: {log_file_path}")
+                logger.info("     Running Pelican analysis")
+                logger.info("     ⚠️ This process typically takes ~40 minutes per subject. Please do not interrupt.")
+                logger.info("     📄 Log is being saved to: {display_path}.")
+                pbar = tqdm(total=100, unit="%", desc="     ⏳ Pelican Progress", leave=True)
+                #console_handler = logging.getLogger().handlers[0]
                 process = subprocess.Popen(
                     command, 
                     env=pelican_cfg.env,        
@@ -93,24 +105,41 @@ def run_pelican(
                     text=True,            
                     bufsize=1,           
                 )
+               
                 # Read output and write it to the log output as it happens
                 for line in process.stdout: # type: ignore
                     log_file.write(line)
                     log_file.flush() 
-
+                    line_count += 1
+                    
+                    # Update terminal every ~500 lines
+                    if line_count % update_interval == 0:
+                        if current_pbar_val < 99: # Cap it at 99% until the process is truly done
+                            pbar.update(1)
+                            current_pbar_val += 1
+                    
+                if current_pbar_val < 100:
+                    pbar.update(100 - current_pbar_val) # Jump to 100%
+                pbar.close()
                 # Wait for the process to actually finish
                 process.wait() 
-                       
-        except subprocess.CalledProcessError as e:
-            print("Script failed!")
-            print(f"Error log: {e.stderr}")
-            print(f"Logging Pelican output can be found in: {log_file_path}")
+
+            # Check the exit status manually
+            if process.returncode != 0:
+                logger.error(f"     ❌ Pelican failed (Exit Code: {process.returncode})")
+                logger.error(f"     🔍 Check the full trace at: {log_file_path}")     
+                raise RuntimeError(f"Pelican execution failed for {subject_id}")
+
+            logger.info(f"     ✅ Pelican finished successfully")        
+            
+        except Exception as e:
+            logger.error(f"     🚨 Unexpected error launching Pelican: {str(e)}")
             raise
 
     # Make sure each visit DBM file exist.
     for dbm_file_path in dbm_file_paths:
         if not dbm_file_path.exists():
-            raise RuntimeError(f"Pelican finished but DBM file not found: {dbm_file_path}")
+            raise RuntimeError(f"   Pelican finished but DBM file not found: {dbm_file_path}")
     
     return dbm_file_paths
 
