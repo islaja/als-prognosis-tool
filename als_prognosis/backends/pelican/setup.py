@@ -82,15 +82,13 @@ def ensure_pelican_ready(
 
 def _default_base_dir() -> Path:
     """
-    Determines the default storage location for Pelican data using environment 
-    variables or standard system cache fallbacks.
+    Determines the default storage location for Pelican data.
     
     Returns:
         Path: The resolved absolute path to the Pelican base directory.
     """
-    # XDG fallback
-    xdg_cache = os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
-    return Path(xdg_cache) / "als_prognosis" / "pelican"
+    base_path = Path.home() / ".local" / "share"
+    return base_path / "als_prognosis" / "pelican"
 
 
 def _grant_execution_permissions(directory: Path):
