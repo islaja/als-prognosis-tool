@@ -1,0 +1,4 @@
+id,visit,age,sex,scanner,dpr,symptom_duration_months,alsfrs_total,path
+subj1,Visit_1,50,male,siemenspri,,36,45,/path/to/your/INPUT_DIR/dbm/subj1/subj1_V1_dbm.mnc
+subj2,Visit_1,63,female,gedisc,0.4,,,/path/to/your/INPUT_DIR/dbm/subj2/subj2_V1_dbm.mnc
+subj3,Visit_1,56,female,,,28,33,/path/to/your/INPUT_DIR/dbm/subj3/subj3_V1_dbm.mnc
