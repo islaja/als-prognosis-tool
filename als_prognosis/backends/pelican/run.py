@@ -4,7 +4,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 from typing import Optional, Union, List
-
+import shutil
 from als_prognosis.backends.pelican.setup import PelicanConfig, ensure_pelican_ready
 from tqdm import tqdm
 import logging
@@ -55,6 +55,8 @@ def run_pelican(
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    log_file_path = output_dir / "pelican.log"
+
     # Ensure the 'models' folder is downloaded/extracted
     if pelican_cfg is None:
         pelican_cfg = ensure_pelican_ready(force=force_setup)
@@ -72,12 +74,18 @@ def run_pelican(
             
             # Built the expected DBM path
             dbm_filename = f"{subject_id}_{visit_str}_dbm.mnc"
-            dbm_path = (output_dir / subject_id / visit_str / "vbm" / dbm_filename).resolve()
+            subj_path = (output_dir / subject_id).resolve()
+            dbm_path = (subj_path / visit_str / "vbm" / dbm_filename).resolve()
             dbm_file_paths.append(dbm_path)
 
             # Logic check: if even one file is missing, we need to run the computation
             if not dbm_path.exists():
                 should_compute_dbm = True
+                # Remove this folder if already exist but no DBM found. 
+                # This is probably because pelican run before but couldn't finish. 
+                if subj_path.exists() and subj_path.is_dir():
+                    shutil.rmtree(subj_path)
+                    log_file_path.unlink(missing_ok=True)
     
     if should_compute_dbm:
         APPROXIMATED_NB_LINES = 6000  
@@ -85,7 +93,7 @@ def run_pelican(
         line_count = 0
         current_pbar_val = 0
 
-        log_file_path = output_dir / "pelican.log"
+        
         display_path = f"{log_file_path.parent.name}/{log_file_path.name}"
         # Prepare to run pelican
         pelican_args = [str(processing_list_path), str(pelican_cfg.models_dir), str(output_dir)]
@@ -93,10 +101,10 @@ def run_pelican(
         try:
             with open(log_file_path, "w") as log_file:
                 logger.info("     Running Pelican analysis")
-                logger.info("     ⚠️ This process typically takes ~40 minutes per subject. Please do not interrupt.")
-                logger.info("     📄 Log is being saved to: {display_path}.")
+                logger.info("     ⚠️ Estimated processing time is 45 to 60 minutes per subject. Please do not interrupt.")
+                logger.info(f"     📄 Log is being saved to: {display_path}.")
                 pbar = tqdm(total=100, unit="%", desc="     ⏳ Pelican Progress", leave=True)
-                #console_handler = logging.getLogger().handlers[0]
+   
                 process = subprocess.Popen(
                     command, 
                     env=pelican_cfg.env,        
@@ -118,18 +126,20 @@ def run_pelican(
                             pbar.update(1)
                             current_pbar_val += 1
                     
-                if current_pbar_val < 100:
-                    pbar.update(100 - current_pbar_val) # Jump to 100%
-                pbar.close()
                 # Wait for the process to actually finish
                 process.wait() 
-
+            
             # Check the exit status manually
             if process.returncode != 0:
                 logger.error(f"     ❌ Pelican failed (Exit Code: {process.returncode})")
-                logger.error(f"     🔍 Check the full trace at: {log_file_path}")     
+                logger.error(f"     🔍 Check the full trace at: {log_file_path}")    
+                pbar.close() 
                 raise RuntimeError(f"Pelican execution failed for {subject_id}")
-
+            
+            if current_pbar_val < 100:
+                pbar.update(100 - current_pbar_val) # Jump to 100%
+            pbar.close()
+            
             logger.info(f"     ✅ Pelican finished successfully")        
             
         except Exception as e:

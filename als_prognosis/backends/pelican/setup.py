@@ -81,15 +81,7 @@ def ensure_pelican_ready(
 # -------------------------
 
 def _default_base_dir() -> Path:
-    """
-    Determines the default storage location for Pelican data.
-    
-    Returns:
-        Path: The resolved absolute path to the Pelican base directory.
-    """
-    base_path = Path.home() / ".local" / "share"
-    return base_path / "als_prognosis" / "pelican"
-
+    return Path("/data/pelican")
 
 def _grant_execution_permissions(directory: Path):
     """
@@ -262,7 +254,7 @@ def _get_neuro_env(minc_tool_extra_dir: Path):
     # Join them, putting your extras at the VERY front
     env["PATH"] = ":".join(additions) + ":" + existing_path
     
-    # 4. Standard library path
+    # Standard library path
     env["LD_LIBRARY_PATH"] = f"{minc_path}/lib:{env.get('LD_LIBRARY_PATH', '')}"
     
     return env
