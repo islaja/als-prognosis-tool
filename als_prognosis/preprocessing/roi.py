@@ -7,7 +7,7 @@ This module provides functions to:
 - Compute regional measures for a single subject image using various atlases
 
 Functions are designed to operate on numpy arrays and pandas dataframes for
-flexible pipeline integration. Debug outputs can optionally be written for intermediate steps.
+flexible pipeline integration.
 """
 
 from pathlib import Path
@@ -129,7 +129,6 @@ def compute_roi_all_atlas(atlases_name: List[str],
                           remove_sulci: bool = True,
                           csf_threshold: Optional[float] = 0.2,
                           result_prefix: str = "",
-                          debug_dir: Optional[Path] = None,
                           include_sides=False,
                           ) -> pd.Series:
     """
@@ -148,7 +147,6 @@ def compute_roi_all_atlas(atlases_name: List[str],
         remove_sulci: Boolean to enable sulcal masking.
         csf_threshold: Threshold for CSF-based sulcal removal.
         result_prefix: Modality prefix for column names (e.g., 'dbm_').
-        debug_dir: Optional path to save intermediate mask files.
         include_sides: Whether to include 'l' and 'r' columns.
 
     Returns:
@@ -210,13 +208,6 @@ def compute_roi_all_atlas(atlases_name: List[str],
         if remove_sulci:
             # update atlas to exclude sulci voxels
             atlas = atlas * not_sulci_bin
-            # optionally write intermediate mask/atlas files into outputs
-            if debug_dir is not None:
-                # Save the atlas mask after sulci removal.
-                debug_atlas_wo_sulci_path = str((debug_dir / f"{atlas_name}_wo_sulci.nii.gz").resolve())
-                atlas_img = nib.Nifti1Image(atlas.astype('int'), atlas_img.affine, atlas_img.header)
-                nib.save(atlas_img, debug_atlas_wo_sulci_path)
-                logger.info(f'Wrote sulci-removed atlas {debug_dir}')
 
         csv_path = out_dir / f"roi_means_{atlas_name}{sulci_suffix}{include_sides_suffix}.csv"
         if not csv_path.exists():

@@ -127,12 +127,12 @@ def main():
                             help='Type of data pointed to by the "Path" column')
     run_parser.add_argument('--outdir', 
                             type=Path, 
-                            default=Path.cwd(), 
+                            default=Path.cwd() / "output", 
                             help='Directory to save results (default: current directory)')
-    run_parser.add_argument('--show_debug_outputs', 
-                            type=bool, 
-                            default=False, 
-                            help='If True, save intermediate debug outputs (default: False)') 
+    run_parser.add_argument('--pelican_path', 
+                            type=Path, 
+                            required=True,
+                            help='Path where pelican directory will be (or was previously) downloaded.')
     
     args = parser.parse_args()
 
@@ -144,13 +144,6 @@ def main():
         log_file = add_file_logging(outdir)
         display_path = f"{log_file.parent.name}/{log_file.name}"  
         logger.info(f"\n📄 Log is being saved to: {display_path}")
-
-        # Create debug output directory if requested
-        if args.show_debug_outputs:
-            debug_dir = outdir / "debug_outputs"
-            debug_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            debug_dir = None
 
         # Load resources configuration
         resources = load_resources(root_dir=root_dir)
@@ -172,7 +165,7 @@ def main():
             outdir=outdir,
             resources=resources,
             root_dir=root_dir,
-            debug_dir=debug_dir,
+            pelican_path=args.pelican_path,
         )
 
         # Print YAML summary

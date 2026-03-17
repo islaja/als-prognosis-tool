@@ -42,7 +42,7 @@ class PelicanConfig:
 
 def ensure_pelican_ready(
     *,
-    base_dir: Optional[Path] = None,
+    base_dir: Path,
     force: bool = False,
 ) -> PelicanConfig:
     """
@@ -50,13 +50,12 @@ def ensure_pelican_ready(
     and environment construction.
     
     Args:
-        base_dir (Path, optional): Custom root directory for assets. Defaults to XDG cache.
+        base_dir (Path): Custom root directory for assets.
         force (bool): If True, deletes existing repertory and performs a fresh download.
         
     Returns:
         PelicanConfig: A frozen dataclass containing all verified paths and environment variables.
     """
-    base_dir = base_dir or _default_base_dir()
     base_dir.mkdir(parents=True, exist_ok=True)
 
     models_dir = base_dir / "Models"
@@ -79,9 +78,6 @@ def ensure_pelican_ready(
 # -------------------------
 # Internal helpers
 # -------------------------
-
-def _default_base_dir() -> Path:
-    return Path("/data/pelican")
 
 def _grant_execution_permissions(directory: Path):
     """
@@ -189,40 +185,27 @@ def _get_pelican_python_bin() -> str:
     Raises:
         RuntimeError: If the environment cannot be located after searching all fallbacks.
     """
-    
-    # Check for an Environment Variable override first (High flexibility)
-    env_path = os.getenv("PELICAN_PYTHON_BIN")
-    if env_path and os.path.exists(env_path):
-       return env_path
 
-    # Check for Docker
-    docker_bin_path = "/opt/conda/envs/pelican_env/bin"
-    if os.path.exists("/.dockerenv"):
-        return docker_bin_path
-
-    # Local Development Fallbacks 
-    # Look for miniconda3, anaconda3, or .conda in the user's home directory
     home = Path.home()
-    possible_conda_roots = [
-        home / "miniconda3",
-        home / "anaconda3",
-        home / "opt/anaconda3",  
-        home / ".conda"
+    
+    # Define every place the environment could possibly be
+    search_paths = [
+        Path("/opt/conda/envs/pelican_env/bin"),      # Docker standard
+        home / "miniconda3/envs/pelican_env/bin",     # Local Mac/Linux
+        home / "anaconda3/envs/pelican_env/bin",      # Local Mac/Linux
+        home / ".conda/envs/pelican_env/bin",         # Hidden conda path
     ]
 
-    for root in possible_conda_roots:
-        bin_path = root / "envs/pelican_env/bin"
-        if bin_path.exists():
-            return str(bin_path)
+    for path in search_paths:
+        if path.exists():
+            # SUCCESS: We found it!
+            return str(path)
 
-    # Raise if not round
-    possible_conda_roots = [str(r / "envs/pelican_env/bin") for r in possible_conda_roots]
-    possible_roots = [env_path, docker_bin_path] + possible_conda_roots
+    # If we get here, it's not anywhere we expected
     raise RuntimeError(
-        f"Pelican environment bin not found. \n"
-        f"Searched in: {possible_roots} and found nothing. \n"
+        f"Pelican environment not found. We checked: {[str(p) for p in search_paths]}. "
+        "Ensure the 'pelican_env' is installed."
     )
-
 
 def _get_neuro_env(minc_tool_extra_dir: Path):
     """

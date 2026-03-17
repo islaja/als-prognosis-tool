@@ -21,6 +21,7 @@ def run_pelican(
     subj_visit: Union[str, List[str]],
     t1w_path: Union[Path, List[Path]],
     output_dir: Path,
+    pelican_path: Path,
     pelican_cfg: Optional[PelicanConfig] = None,
     *,
     force_setup: bool = False
@@ -59,7 +60,7 @@ def run_pelican(
 
     # Ensure the 'models' folder is downloaded/extracted
     if pelican_cfg is None:
-        pelican_cfg = ensure_pelican_ready(force=force_setup)
+        pelican_cfg = ensure_pelican_ready(base_dir=pelican_path, force=force_setup)
 
     should_compute_dbm = False
     dbm_file_paths = []
@@ -102,7 +103,7 @@ def run_pelican(
             with open(log_file_path, "w") as log_file:
                 logger.info("     Running Pelican analysis")
                 logger.info("     ⚠️ Estimated processing time is 45 to 60 minutes per subject. Please do not interrupt.")
-                logger.info(f"     📄 Log is being saved to: {display_path}.")
+                logger.info(f"     📄 Log is being saved to: {display_path}")
                 pbar = tqdm(total=100, unit="%", desc="     ⏳ Pelican Progress", leave=True)
    
                 process = subprocess.Popen(

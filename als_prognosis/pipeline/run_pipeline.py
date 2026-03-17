@@ -25,8 +25,6 @@ subject_outdir : Path
     Directory for per-subject outputs
 resources : dict
     Loaded resources configuration (atlases, etc.)
-debug_dir : Path or None
-    Optional directory for debug outputs
 features : pandas.Series
     Features extracted/processed through the pipeline
 prediction : dict
@@ -35,7 +33,6 @@ prediction : dict
 Notes:
 - 'features' is created after ROI extraction or CSV input reading.
 - 'prediction' is added by `predict_step`.
-- 'debug_dir' is optional; only used if debug outputs are enabled.
 """
 
 
@@ -186,6 +183,7 @@ def make_run_pelican_step(dfg: Dict):
         visit = context["row"][cols_mapping['visit']]
         subject_outdir = context["subject_outdir"]
         t1_path = context["input_path"]
+        pelican_path = context["pelican_path"]
         
         # convert to .mnc if necessary
         if ".nii" in t1_path.suffixes:
@@ -205,6 +203,7 @@ def make_run_pelican_step(dfg: Dict):
             visit, 
             t1_path,
             pelican_output_path, 
+            pelican_path,
             context.get("pelican_cfg"),
         )
         # For now the current pipeline is treating one visit at a time, so one output.
@@ -293,7 +292,6 @@ def make_roi_extraction_step(cfg: Dict):
             remove_sulci=remove_sulci,
             csf_threshold=csf_threshold,
             result_prefix=result_prefix,
-            debug_dir=context.get("debug_dir"),
             include_sides=False
             )
     
@@ -629,9 +627,9 @@ def run_for_row(
         resources: Dict,
         root_dir: Path,
         input_type: str,
+        pelican_path: Path,
         pelican_cfg: Optional[PelicanConfig] = None,
-        debug_dir: Optional[Path] = None,
-    ) -> Dict: 
+    ) -> Optional[Dict]:
     """
     Run the full processing pipeline for a single subject row.
 
@@ -644,7 +642,6 @@ def run_for_row(
         resources (Dict): Resources loaded from config
         root_dir (Path): Project root directory
         input_type (str): Type of input (features, DBM maps, T1)
-        debug_dir (Optional[Path]): Optional debug outputs directory
 
     Returns:
         Dict: Prediction result for this subject
@@ -683,8 +680,8 @@ def run_for_row(
         "desc": desc,
         "input_path": input_path,
         "resources": resources,
+        "pelican_path": pelican_path,
         "pelican_cfg": pelican_cfg,
-        "debug_dir": debug_dir,
         "cols_mapping": COLUMN_MAPPING,
     } 
 
@@ -782,7 +779,7 @@ def run_batch(
         outdir: Path, 
         resources: Dict, 
         root_dir: Path,
-        debug_dir: Optional[Path] = None,
+        pelican_path: Path,
     ) -> List:
     """
     Run the pipeline for all rows in a CSV file.
@@ -794,7 +791,6 @@ def run_batch(
         outdir (Path): Root output directory
         resources (Dict): Loaded resources configuration
         root_dir (Path): Project root directory
-        debug_dir (Optional[Path]): Directory for debug outputs
 
     Returns:
         List[Dict]: List of prediction results for each row
@@ -815,7 +811,7 @@ def run_batch(
 
     pelican_cfg: Optional[PelicanConfig] = None
     if pelican_needed:
-        pelican_cfg = ensure_pelican_ready()
+        pelican_cfg = ensure_pelican_ready(base_dir=pelican_path)
 
     results = []
     for _, row in df.iterrows():
@@ -828,8 +824,8 @@ def run_batch(
             resources=resources, 
             root_dir=root_dir,
             input_type=input_type,
+            pelican_path=pelican_path,
             pelican_cfg=pelican_cfg,
-            debug_dir=debug_dir,
             )
         
         # Only add to results if the pipeline actually finished
