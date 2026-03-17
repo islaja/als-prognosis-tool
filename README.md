@@ -3,7 +3,7 @@
 This container provides a ready-to-use environment for running the
 **ALS-prognosis-tool** inference pipeline. It simplifies the setup of complex
 neuroimaging tools by bundling the MINC Toolkit, ANTs, Pelican, the SuStaIn and 
-the CoxnetSurvival models into a single, executable package.
+the Cox-net regularized regression models into a single, executable package.
 
 This repository follows a Dockerfile-based distribution, ensuring that the computational environment, including all neuroimaging dependencies and pre-trained model weights, is perfectly reconstructed on your local machine, regardless of your host operating system.
 
@@ -11,18 +11,16 @@ This repository follows a Dockerfile-based distribution, ensuring that the compu
 
 The preprocessing pipeline, the control dataset used for normalization,
 and the trained SuStaIn model implemented in this tool are based on the
-methodology described in Lajoie et al. (2025):
+methodology described in [Lajoie et al., 2025a](https://doi.org/10.64898/2025.12.02.25341482).
 
-> **Reference:** https://doi.org/10.64898/2025.12.02.25341482\
+
 > *Please refer to the article and its supplementary information for
 > detailed documentation regarding the trained model parameters,
 > harmonization techniques, and the control cohort used for w-scoring.*
 
-This model was created using the **pySuStaIn** framework ([ucl-pond/pySuStaIn](https://github.com/ucl-pond/pySuStaIn)) based on the Subtype and Stage Inference algorithm (doi: [10.1038/s41467-018-05892-0](https://doi.org/10.1038/s41467-018-05892-0)). It was trained on **CALSNIC 1-2 data** ([https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)) using regional W-scores from **14 anatomical regions** that integrate Brettschneider pTDP-43 stages with ALS imaging literature. These regions include the motor/premotor cortices, corticospinal tract and brainstem, fronto-parietal association cortices, basal ganglia, and medial temporal structures.
+This model was created using the [pySuStaIn framework](https://github.com/ucl-pond/pySuStaIn) based on the Subtype and Stage Inference algorithm ([Young et al., 2018](https://doi.org/10.1038/s41467-018-05892-0)). It was trained on a large, prospectively acquired multicenter longitudinal ALS cohort (CALSNIC-1 and CALSNIC-2) ([Kalra et al., 2019](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)) using regional w-scores from 14 anatomical regions that integrate Brettschneider pTDP-43 stages ([Brettschneider et al., 2013](https://doi.org/10.1002/ana.23937)) with ALS imaging literature. These regions include the motor/premotor cortices, corticospinal tract and brainstem, fronto-parietal association cortices, basal ganglia, and medial temporal structures.
 
-The survival prognosis is estimated using a Coxnet Regularized Regression model. This model integrates the SuStaIn subtype/stage interaction with the individual's Disease Progression Rate (DPR) to project survival probability over time. The methodology to train the individual survival distribution (ISD) model is described in Lajoie et al. (2025):
-
-> **Reference:** https://doi.org/10.64898/2025.12.02.25341482
+The survival prognosis is estimated using a Cox-net regularized regression. This model integrates the SuStaIn subtype/stage interaction with the individual's Disease Progression Rate (DPR) to project survival probability over time. The methodology to train the survival model and obtain the Individual Survival Distributions (ISDs) is described in [Lajoie et al., 2025b](https://doi.org/10.1002/ana.27196).
 
 ------------------------------------------------------------------------
 
@@ -162,7 +160,7 @@ The file `results_summary.csv` aggregates the final inferences for all participa
 
 * **SuStaIn Subtype & Stage:** The predicted disease trajectory (0 for normal-appearing, 1,2 or 3) and progression point (ranging from **0** to **14**).
 * **Subtype Probabilities:** The probability/certainty scores for each possible disease subtype.
-* **Median Survival Time:** The estimated time (in months) to the survival endpoint (death or respiratory failure, at probability=50%), calculated by the **Coxnet model**.
+* **Median Survival Time:** The estimated time (in months) to the survival endpoint (death or respiratory failure, at probability=50%), calculated by the Cox-net regularized regression.
 
 ### Additional Subject Outputs
 * **W-scores:** Regional neuroimaging values adjusted for **age, sex, and scanner (if provided)**. 
@@ -178,38 +176,41 @@ The file `results_summary.csv` aggregates the final inferences for all participa
 The tool adapts its workflow based on your provided input_type. If you provide Deformation Based Morphometry maps (dbm_maps), the tool skips the first step and begins directly with regional extraction.
 
 1.  **DBM Generation (Pelican):**
-    * **Only for `t1w_maps`:** Utilizes the Pelican Longitudinal Processing Pipeline ([VANDAlab/Preprocessing_Pipeline](https://github.com/VANDAlab/Preprocessing_Pipeline)) to generate high-quality Deformation Based Morphometry (DBM) maps.
+    * **Only for `t1w_maps`:** Utilizes the [Pelican Longitudinal Processing Pipeline](https://github.com/VANDAlab/Preprocessing_Pipeline) to generate high-quality Deformation Based Morphometry (DBM) maps.
     * **For `dbm_maps`:** This step is **skipped**; the tool uses your provided maps as the direct input for the next stage.
-    * **Note:** The container automatically downloads the required Pelican repository (hosted on [Zenodo](https://zenodo.org/records/17168419)) during the first run: https://zenodo.org/records/17168419.
+    * **Note:** The container automatically downloads the required Pelican repository (hosted on [Zenodo](https://zenodo.org/records/17168419)) during the first run.
 
 2.  **Regional Extraction:** Once DBM maps are generated, the pipeline extracts
     regional averages from the anatomical volumes. Beyond the 14 regions required for SuStaIn, this step computes averages for:
-    * All Gray Matter (GM) regions from the **CerebrA atlas** [ref].
-    * GM, WM and ventricle volumes from the **Allen atlas** [ref].
-    * White Matter (WM) tracts from the **JHU atlas** [ref].
+    * All Gray Matter (GM) regions from the **CerebrA atlas** ([Manera et al., 2020](https://doi.org/10.1038/s41597-020-0557-9)).
+    * GM, WM and ventricle volumes from the **Allen atlas** ([Hawrylycz et al., 2012](https://doi.org/10.1038/nature11405)).
+    * White Matter (WM) tracts from the **JHU atlas** ([Wakana et al., 2007](https://doi.org/10.1016/j.neuroimage.2007.02.049)).
     * Combined GM and WM "hand-knob" regions using a custom anatomical mask.  
     
     The **ICBM CSF probability mask** is employed to exclude sulci from the average computation to ensure signal purity. All templates, atlas maps, and label descriptions are available under the `/resources` folder.
 
 3.  **W-Scoring:** These regional values are converted into w-scores
     (z-scores adjusted for age, sex, and scanner) based on the normative
-    control dataset described in Lajoie et al. (2025) (https://doi.org/10.64898/2025.12.02.25341482).
+    control dataset described in [Lajoie et al., 2025a](https://doi.org/10.64898/2025.12.02.25341482).
 
 4.  **SuStaIn Inferences:** The 14 selected regional w-scores
     are input into the pre-trained SuStaIn model to determine the 
-    disease subtype and stage (Lajoie et al., 2025, https://doi.org/10.64898/2025.12.02.25341482). 
+    disease subtype and stage ([Lajoie et al., 2025a](https://doi.org/10.64898/2025.12.02.25341482)). 
 
-5. **Survival Prediction:** If a Disease Progression Rate (DPR) is available (either provided directly or computed from symptom duration and ALSFRS score), the pre-trained CoxnetSurvival model uses the DPR and the SuStaIn subtype × stage interaction to estimate the individual's survival distribution and median survival time. 
+5. **Survival Prediction:** If a Disease Progression Rate (DPR) is provided
+    (or computed from symptom duration and ALSFRS-R scores), the tool utilizes a Cox-net regularized regression. Following the methodology established in [Lajoie et al., 2025b](https://doi.org/10.1002/ana.27196), the model integrates the DPR with the SuStaIn subtype × stage interaction to estimate Individual Survival Distributions (ISDs) and median survival times. 
 
+    **Technical Note on Performance:** Internal cross-validation indicates that this optimized feature set (DPR + subtype × stage interaction) yields a higher C-index than the clinical + DBM feature combination reported in Lajoie et al., 2025b. These performance gains were verified using a nested cross-validation framework to prevent data leakage during the SuStaIn subtyping and stage inference process.
+    
 ------------------------------------------------------------------------
 
 ## 🔄 Version Control & Updates
 
 To upbdate your local environment after ALS-prognosis-tool is updated, following these steps:
 
-**Back up the run_als_prognosis_docker.sh:**
+**Back up the `run_als_prognosis_docker.sh`:**
 
-Back up the run_als_prognosis_docker.sh script with your personal paths before running the next step to avoid overwriting it.
+Back up the `run_als_prognosis_docker.sh` script with your personal paths before running the next step to avoid overwriting it.
 
 **Pull the latest code changes:**
 
