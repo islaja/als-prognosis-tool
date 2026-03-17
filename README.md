@@ -9,6 +9,8 @@ This repository follows a Dockerfile-based distribution, ensuring that the compu
 
 ## 📖 Scientific Basis
 
+ Data include clinical and T1w images from CALSNIC, a large, prospectively acquired multicenter longitudinal ALS cohort ([Kalra et al., 2019](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)).
+
 The preprocessing pipeline, the control dataset used for normalization,
 and the trained SuStaIn model implemented in this tool are based on the
 methodology described in [Lajoie et al., 2025a](https://doi.org/10.64898/2025.12.02.25341482).
@@ -18,7 +20,7 @@ methodology described in [Lajoie et al., 2025a](https://doi.org/10.64898/2025.12
 > detailed documentation regarding the trained model parameters,
 > harmonization techniques, and the control cohort used for w-scoring.*
 
-This model was created using the [pySuStaIn framework](https://github.com/ucl-pond/pySuStaIn) based on the Subtype and Stage Inference algorithm ([Young et al., 2018](https://doi.org/10.1038/s41467-018-05892-0)). It was trained on a large, prospectively acquired multicenter longitudinal ALS cohort (CALSNIC-1 and CALSNIC-2) ([Kalra et al., 2019](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)) using regional w-scores from 14 anatomical regions that integrate Brettschneider pTDP-43 stages ([Brettschneider et al., 2013](https://doi.org/10.1002/ana.23937)) with ALS imaging literature. These regions include the motor/premotor cortices, corticospinal tract and brainstem, fronto-parietal association cortices, basal ganglia, and medial temporal structures.
+This model was created using the [pySuStaIn framework](https://github.com/ucl-pond/pySuStaIn) based on the Subtype and Stage Inference algorithm ([Young et al., 2018](https://doi.org/10.1038/s41467-018-05892-0)). It was trained on regional deformation-based morphometry (DBM) w-scores from 14 anatomical regions selected to reflect the Brettschneider pTDP-43 staging scheme([Brettschneider et al., 2013](https://doi.org/10.1002/ana.23937)) and established ALS imaging literature. These key regions include the motor and premotor cortices, the corticospinal tract and brainstem, fronto-parietal association cortices, basal ganglia, and medial temporal structures.
 
 The survival prognosis is estimated using a Cox-net regularized regression. This model integrates the SuStaIn subtype/stage interaction with the individual's Disease Progression Rate (DPR) to project survival probability over time. The methodology to train the survival model and obtain the Individual Survival Distributions (ISDs) is described in [Lajoie et al., 2025b](https://doi.org/10.1002/ana.27196).
 
