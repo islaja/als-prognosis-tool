@@ -19,3 +19,10 @@ outputs/
 output/
 results/
 
+# Editor file
+.vscode/
+
+# Cache
+.pytest_cache
+
+
