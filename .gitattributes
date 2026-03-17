@@ -1,0 +1,10 @@
+# Force shell scripts to always use Unix (LF) line endings
+*.sh text eol=lf
+
+# (Optional) Force Python files to also use LF to avoid rare issues
+*.py text eol=lf
+
+# Treat neuroimaging and data files as binary
+*.nii binary
+*.nii.gz binary
+*.csv text eol=lf

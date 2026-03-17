@@ -1,9 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "als_sustain"
+name = "als_prognosis"
 version = "0.1.0"
+authors = [
+  { name="Isabelle Lajoie" },
+]
+description = "A clinical tool for ALS disease progression subtyping and survival prognosis."
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scikit-survival",
+    "nibabel",
+    "joblib",
+    "PyYAML",
+    "seaborn",
+    "statsmodels",
+    "tqdm"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["als_prognosis*"]
 
 [tool.setuptools.package-data]
-"als_sustain.backends.pelican" = ["*.sh"]
+"als_prognosis.backends.pelican" = ["*.sh"]
