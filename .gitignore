@@ -19,6 +19,9 @@ outputs/
 output/
 results/
 
+# .csv from test modules
+tests/*.csv
+
 # Editor file
 .vscode/
 

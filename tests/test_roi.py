@@ -15,7 +15,7 @@ from pathlib import Path
 import logging
 import pandas as pd
 import yaml
-from als_sustain.preprocessing.roi import compute_roi_all_atlas
+from als_prognosis.preprocessing.roi import compute_roi_all_atlas
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,6 @@ def test_compute_roi_real_data():
     dbm_path = (test_dir / "data" / "DBM_P001_V1_for_test.nii.gz").resolve()
     metadata = pd.Series({"ID": "P001", "Visit": "V1"})
     
-
-    debug_dir = test_dir / "compute_roi_debug"
-    debug_dir.mkdir(exist_ok=True)
-
     # Load container resources configuration
     resources_yaml = Path("config/resources.yaml")
     with resources_yaml.open() as f:
@@ -84,7 +80,6 @@ def test_compute_roi_real_data():
             out_dir=test_dir,
             remove_sulci=remove_sulci,
             csf_threshold=csf_threshold,
-            debug_dir=debug_dir,
             include_sides=False
             )
     

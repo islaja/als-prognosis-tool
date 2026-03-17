@@ -225,3 +225,17 @@ Docker will automatically detect changes in the code or dependencies and update 
 docker build --platform linux/amd64 -t als-prognosis-app .
 ```
 
+------------------------------------------------------------------------
+
+## 🧪 Testing & Reliability
+
+This project uses `pytest` to validate the core neuroimaging pipeline, prioritizing high-risk components over superficial coverage.
+
+### Key Validations
+* **ROI Integrity:** Integration tests verify atlas mapping on real DBM data to ensure zero `NaN` values.
+* **Pipeline Orchestration:** Employs **monkeypatching** to validate complex logic (Pelican, w-scoring, SuStaIn) without heavy external dependencies.
+* **Config Parsing:** Ensures model descriptors and resource YAMLs are correctly interpreted across processing steps.
+
+### Status
+* **Current:** Core preprocessing and subtyping orchestration tests are **passing**.
+* **Roadmap:** Survival prognosis module coverage is planned; the modular architecture allows for easy extension using existing mock patterns.
