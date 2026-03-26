@@ -183,12 +183,14 @@ For each subject in your cohort, the pipeline generates a dedicated subfolder co
 ```text
 [OUTPUT_DIR]/[OUT_SUBDIR]/
 ├── results_summary.csv                     # 🚩 Main Cohort Summary
-└── [Subject_ID]_[Visit]/                   # Individual Subject Folder
-    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 Deformation-Based Morphometry map
-    ├── roi_means_all_atlas.csv             # Raw regional DBM averages
-    ├── roi_wscores_all_atlas.csv           # Regional DBM w-scores
-    ├── prognosis.png                       # 📊 Individual predicted survival curve
-    └── predicted_survival_curve.csv        # Survival probability at each time point
+└── [Subject_ID]_[Visit]/                   # 📂 Individual Subject Folder
+    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 Deformation-Based Morphometry map obtained from Pelican
+    ├── roi_means_*.csv                     # 📄 Atlas-specific raw DBM averages
+    ├── roi_means_all_atlas.csv             # 📄 All atlas raw DBM averages
+    ├── roi_wscores_all_atlas.csv           # 📄 All atlas DBM w-scores averages
+    ├── prognosis.png                       # 📉 Individual predicted survival curve
+    ├── predicted_survival_curve.csv        # 📄 Survival probability at each time point
+    └── pelican_outputs/                    # 📂 Pelican log and intermediary outputs
 ```
 
 ### Global Summary
