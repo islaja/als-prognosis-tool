@@ -59,7 +59,7 @@ docker build --platform linux/amd64 -t als-prognosis-app .
 
 #### CSV Manifest Format (`INPUT_FILE`)
 
-Use the `Participant_Inputs_File_template.csv` located in the `examples/` folder as template, and fill in with your own patients' information. 
+Use the `Participant_Inputs_File_template.csv` located in the `examples/` folder as a template, and fill in with your own patients' information. 
 
 Your CSV must contain these mandatory columns:
 
@@ -140,39 +140,6 @@ bash run_als_prognosis_docker.sh
 
 ------------------------------------------------------------------------
 
-## 📂 Output Structure & Interpretation
-
-Results are organized by execution timestamp within your designated `OUTPUT_DIR`. For each subject in your cohort, the pipeline generates a dedicated subfolder containing intermediate neuroimaging maps and final diagnostic plots.
-
-### Directory Organization
-```text
-results_20260306/
-├── results_summary.csv                     # 🚩 Main Cohort Summary
-└── [Subject_ID]_[Visit]/                   # Individual Subject Folder
-    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 Deformation-Based Morphometry map
-    ├── roi_means_all_atlas.csv             # Raw regional DBM averages
-    ├── roi_wscores_all_atlas.csv           # Regional DBM w-scores
-    ├── prognosis.png                       # 📊 Individual predicted survival curve
-    └── predicted_survival_curve.csv        # Survival probability at each time point
-```
-
-### Global Summary
-
-The file `results_summary.csv` aggregates the final inferences for all participants. It is the primary file for your statistical analysis and includes:
-
-* **SuStaIn Subtype & Stage:** The predicted disease trajectory (0 for normal-appearing, 1,2 or 3) and progression point (ranging from **0** to **14**).
-* **Subtype Probabilities:** The probability/certainty scores for each possible disease subtype.
-* **Median Survival Time:** The estimated time (in months) to the survival endpoint (death or respiratory failure, at probability=50%), calculated by the Cox-net regularized regression.
-
-### Additional Subject Outputs
-* **W-scores:** Regional neuroimaging values adjusted for **age, sex, and scanner (if provided)**. 
-    * A **w-score of 0** represents a "typical" control. 
-    * **Lower negative values** indicate increasing degrees of atrophy or deviation from the norm.
-    * **Higher positive values** indicate expansion relative to the norm.
-* **Prognosis Plot (`.png`):** A visual representation of the predicted subject's Individual Survival Distribution (ISD), overlayed to the CALSNIC ALS patients' ISD as references, providing a clear clinical projection of the disease trajectory over time.
-
-------------------------------------------------------------------------
-
 ## 🧠 The Processing Pipeline
 
 The tool adapts its workflow based on your provided input_type. If you provide Deformation Based Morphometry maps (dbm_maps), the tool skips the first step and begins directly with regional extraction.
@@ -204,11 +171,46 @@ The tool adapts its workflow based on your provided input_type. If you provide D
 
     **Technical Note on Performance:** Internal cross-validation indicates that this optimized feature set (DPR + subtype × stage interaction) yields a higher C-index than the clinical + DBM feature combination reported in Lajoie et al., 2025b. These performance gains were verified using a nested cross-validation framework to prevent data leakage during the SuStaIn subtyping and stage inference process.
     
+While these stages are running, the tool organizes the generated data into a structured output directory for analysis.
+
+------------------------------------------------------------------------
+
+## 📂 Output Structure & Interpretation
+
+For each subject in your cohort, the pipeline generates a dedicated subfolder containing intermediate neuroimaging maps and final diagnostic plots.
+
+### Directory Organization
+```text
+[OUTPUT_DIR]/[OUT_SUBDIR]/
+├── results_summary.csv                     # 🚩 Main Cohort Summary
+└── [Subject_ID]_[Visit]/                   # Individual Subject Folder
+    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 Deformation-Based Morphometry map
+    ├── roi_means_all_atlas.csv             # Raw regional DBM averages
+    ├── roi_wscores_all_atlas.csv           # Regional DBM w-scores
+    ├── prognosis.png                       # 📊 Individual predicted survival curve
+    └── predicted_survival_curve.csv        # Survival probability at each time point
+```
+
+### Global Summary
+
+The file `results_summary.csv` aggregates the final inferences for all participants. It is the primary file for your statistical analysis and includes:
+
+* **SuStaIn Subtype & Stage:** The predicted disease trajectory (0 for normal-appearing, 1,2 or 3) and progression point (ranging from **0** to **14**).
+* **Subtype Probabilities:** The probability/certainty scores for each possible disease subtype.
+* **Median Survival Time:** The estimated time (in months) to the survival endpoint (death or respiratory failure, at probability=50%), calculated by the Cox-net regularized regression.
+
+### Additional Subject Outputs
+* **W-scores:** Regional neuroimaging values adjusted for **age, sex, and scanner (if provided)**. 
+    * A **w-score of 0** represents a "typical" control. 
+    * **Lower negative values** indicate increasing degrees of atrophy or deviation from the norm.
+    * **Higher positive values** indicate expansion relative to the norm.
+* **Prognosis Plot (`.png`):** A visual representation of the predicted subject's Individual Survival Distribution (ISD), overlayed to the CALSNIC ALS patients' ISD as references, providing a clear clinical projection of the disease trajectory over time.
+
 ------------------------------------------------------------------------
 
 ## 🔄 Version Control & Updates
 
-To upbdate your local environment after ALS-prognosis-tool is updated, following these steps:
+To update your local environment after ALS-prognosis-tool is updated, following these steps:
 
 **Back up the `run_als_prognosis_docker.sh`:**
 
@@ -242,3 +244,35 @@ This project uses `pytest` to validate the core neuroimaging pipeline, prioritiz
 ### Status
 * **Current:** Core preprocessing and subtyping orchestration tests are **passing**.
 * **Roadmap:** Survival prognosis module coverage is planned; the modular architecture allows for easy extension using existing mock patterns.
+
+------------------------------------------------------------------------
+
+## 📜 License
+
+This project is licensed under the MIT License.
+See the LICENSE file for full details.
+
+
+## ⚠️ Medical Disclaimer
+
+This tool is intended for research purposes only.
+
+It has not been approved or cleared by regulatory authorities such as the
+U.S. Food and Drug Administration (FDA) or Health Canada for clinical use.
+
+The outputs and prognostic estimates generated by this tool must not be used
+as the sole basis for clinical decision-making and should be interpreted only
+within a research context by qualified professionals.
+
+
+## 🧠 Intended Use & Limitations
+
+This software is designed to support research in neuroimaging and disease
+progression modeling, particularly in the context of ALS.
+
+The models are trained on specific datasets and may not generalize to all populations.
+Outputs are probabilistic and subject to uncertainty inherent to machine learning models.
+The tool is not a medical device and is not intended for diagnosis, treatment, or patient management.
+
+Users are responsible for ensuring appropriate use and for validating results
+within their own research or clinical frameworks.

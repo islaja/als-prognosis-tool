@@ -16,7 +16,7 @@ INPUT_DIR="$(pwd)/data"
 # The name of the CSV file inside your INPUT_DIR
 INPUT_FILE="participant_inputs.csv"
 
-# The type of input (e.g., t1w_maps, dbm_maps)
+# The type of input (must be t1w_maps or dbm_maps)
 INPUT_TYPE="t1w_maps"
 
 # Where should the results be saved?
