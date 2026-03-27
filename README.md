@@ -177,36 +177,58 @@ While these stages are running, the tool organizes the generated data into a str
 
 ## 📂 Output Structure & Interpretation
 
-For each subject in your cohort, the pipeline generates a dedicated subfolder containing intermediate neuroimaging maps and final diagnostic plots.
+For each subject in your cohort, the pipeline generates a dedicated subfolder containing intermediate neuroimaging maps and final diagnostic plots. A complete sample of these outputs is provided in the [examples/outputs/](./examples/outputs/) folder for reference.
 
 ### Directory Organization
 ```text
 [OUTPUT_DIR]/[OUT_SUBDIR]/
-├── results_summary.csv                     # 🚩 Main Cohort Summary
-└── [Subject_ID]_[Visit]/                   # 📂 Individual Subject Folder
-    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 Deformation-Based Morphometry map obtained from Pelican
+├── results_summary.csv                     # 🚩 Main cohort summary
+├── pipeline.log                            # 📄 Log of the ALS-Prognosis pipeline
+└── [Subject_ID]_[Visit]/                   # 📂 Individual subject folder
+    ├── [Subject_ID]_[Visit]_dbm.nii.gz     # 🧠 DBM map (from Pelican)
     ├── roi_means_*.csv                     # 📄 Atlas-specific raw DBM averages
     ├── roi_means_all_atlas.csv             # 📄 All atlas raw DBM averages
     ├── roi_wscores_all_atlas.csv           # 📄 All atlas DBM w-scores averages
-    ├── prognosis.png                       # 📉 Individual predicted survival curve
+    ├── prognosis.png.                      # 📉 Individual predicted Survival Distribution (ISD) curve
     ├── predicted_survival_curve.csv        # 📄 Survival probability at each time point
-    └── pelican_outputs/                    # 📂 Pelican log and intermediary outputs
+    └── pelican_outputs/                    # 📂 Pelican log and intermediates (omitted in example)
 ```
 
-### Global Summary
+### 📋 Detailed File Descriptions, Interpretation & Examples
 
-The file `results_summary.csv` aggregates the final inferences for all participants. It is the primary file for your statistical analysis and includes:
+* 🚩 **[`results_summary.csv`](./examples/outputs/results_summary.csv)**: **Main Cohort Summary.** Aggregates final inferences for all participants, including:
+    * **Median Survival Time:** Estimated time (months) to 50% survival probability mark.
+    * **SuStaIn Subtype & Stage:** Predicted disease trajectory (0 for normal-appearing, subtypes 1,2 or 3) and current progression point (Stages 0-14).
+    * **Subtype Probabilities:** Specific confidence scores for each possible disease subtype.
 
-* **SuStaIn Subtype & Stage:** The predicted disease trajectory (0 for normal-appearing, 1,2 or 3) and progression point (ranging from **0** to **14**).
-* **Subtype Probabilities:** The probability/certainty scores for each possible disease subtype.
-* **Median Survival Time:** The estimated time (in months) to the survival endpoint (death or respiratory failure, at probability=50%), calculated by the Cox-net regularized regression.
+    <div style="overflow-x: auto; white-space: nowrap; border: 1px solid #ddd; border-radius: 4px; padding: 0px; margin: 5px 0; font-size: 0.85em;">
 
-### Additional Subject Outputs
-* **W-scores:** Regional neuroimaging values adjusted for **age, sex, and scanner (if provided)**. 
-    * A **w-score of 0** represents a "typical" control. 
-    * **Lower negative values** indicate increasing degrees of atrophy or deviation from the norm.
-    * **Higher positive values** indicate expansion relative to the norm.
-* **Prognosis Plot (`.png`):** A visual representation of the predicted subject's Individual Survival Distribution (ISD), overlayed to the CALSNIC ALS patients' ISD as references, providing a clear clinical projection of the disease trajectory over time.
+    | **Example of results_summary.csv** | | | | | | | | | | | |
+    | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+    | ID | Visit | DPR | model_id | predicted_median_survival_time(months) | inferred_subtype | prob_inferred_subtype | inferred_stage | prob_inferred_stage | prob_s1 | prob_s2 | prob_s3 |
+    | **sub1** | Visit_1 | 0.54 | CALSNIC_sustain_14_reg_dbm_wscore | 15.6 | 2.0 | 0.976 | 13.0 | 0.129 | 0.021 | 0.976 | 0.003 |
+    | **sub2** | Visit_1 | 0.5 | CALSNIC_sustain_14_reg_dbm_wscore | 33.1 | 1.0 | 0.935 | 2.0 | 0.24 | 0.935 | 0.058 | 0.007 |
+    | **sub3** | Visit_1 | 0.93 | CALSNIC_sustain_14_reg_dbm_wscore | 11.3 | 2.0 | 0.938 | 14.0 | 0.124 | 0.053 | 0.938 | 0.009 |
+    </div>
+
+* 📄 **[`pipeline.log`](./examples/outputs/pipeline.log)**: Full record of the execution steps from DBM extraction to survival prediction.
+* 📂 **`[Subject_ID]_[Visit]/`**: Individual Subject Folder
+    * 🧠 **`[Subject_ID]_[Visit]_dbm.nii.gz`** — Deformation-Based Morphometry (DBM) map obtained from Pelican.
+    * 📄 [`roi_means_all_atlas.csv`](./examples/outputs/sub1_Visit_1/roi_means_all_atlas.csv) — Atlas-specific raw DBM averages.
+    * 📄 [`roi_wscores_all_atlas.csv`](./examples/outputs/sub1_Visit_1/roi_wscores_all_atlas.csv) — DBM w-scores adjusted for age, sex, and scanner (if provided). 
+        * *A w-score of 0 represents a "typical" control; negative values indicate atrophy (deviation from the norm); positive values indicate expansion relative to the norm.*
+    * 📉 **`prognosis.png`**: Individual Survival Distribution (ISD) Curve. Visualizes predicted survival vs. reference cohorts.
+    
+        <b>Example of Prognosis Plot</b>
+        ![Prognosis Plot Example](./examples/outputs/sub1_Visit_1/prognosis.png)
+        
+        **Plot Legend:**
+        * **Black Line:** Individual predicted survival distribution (ISD) calculated using the Cox-net model.
+        * **Colored Lines:** CALSNIC training population curves, colored according to their respective attributed SuStaIn subtype (S0: Pink, S1: Olive, S2: Teal, S3: Purple).
+        * **Vertical Dashed Line:** Points to the predicted median survival (50% probability). In this example, the subject is identified as Subtype 2, Stage 13, with a predicted median survival of 15.6 months.
+
+    * 📄 **[`predicted_survival_curve.csv`](./examples/outputs/sub1_Visit_1/predicted_survival_curve.csv)** — Survival probability data at each time point (0–60 months).
+    * 📂 `pelican_outputs/` — Pelican logs and intermediate registration files (omitted in example).
 
 ------------------------------------------------------------------------
 
