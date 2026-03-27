@@ -19,6 +19,8 @@ outputs/
 output/
 results/
 
+!examples/outputs/
+
 # .csv from test modules
 tests/*.csv
 

@@ -1,0 +1,4 @@
+ID,Visit,DPR,model_id,predicted_median_survival_time(months),inferred_subtype,prob_inferred_subtype,inferred_stage,prob_inferred_stage,prob_s1,prob_s2,prob_s3
+sub1,Visit_1,0.54,CALSNIC_sustain_14_reg_dbm_wscore,15.6,2.0,0.976,13.0,0.129,0.021,0.976,0.003
+sub2,Visit_1,0.5,CALSNIC_sustain_14_reg_dbm_wscore,33.1,1.0,0.935,2.0,0.24,0.935,0.058,0.007
+sub3,Visit_1,0.93,CALSNIC_sustain_14_reg_dbm_wscore,11.3,2.0,0.938,14.0,0.124,0.053,0.938,0.009

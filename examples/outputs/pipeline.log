@@ -1,0 +1,62 @@
+
+📄 Log is being saved to: results_20260317/pipeline.log
+
+--- Starting Pipeline for Subject: sub1 Visit_1 ---
+
+  Step 1/5: DBM Generation ...
+     ↳ 📊 Saving : vbm/sub1_Visit_1_dbm.mnc
+
+  Step 2/5: ROI Extraction ...
+     ↳ 📊 Saving : sub1_Visit_1/roi_means_all_atlas.csv
+
+  Step 3/5: W-Score Computation ...
+     ↳ 📊 Saving : sub1_Visit_1/roi_wscores_all_atlas.csv
+
+  Step 4/5: Stage and Subtype Inference ...
+
+  Step 5/5: Survival Prediction ...
+     ↳ 📊 Saving : sub1_Visit_1/prognosis.png
+     ↳ 📊 Saving : sub1_Visit_1/predicted_survival_curve.csv
+
+   ✅ Successfully completed all steps for sub1.
+
+--- Starting Pipeline for Subject: sub2 Visit_1 ---
+
+  Step 1/5: DBM Generation ...
+     ↳ 📊 Saving : vbm/sub2_Visit_1_dbm.mnc
+
+  Step 2/5: ROI Extraction ...
+     ↳ 📊 Saving : sub2_Visit_1/roi_means_all_atlas.csv
+
+  Step 3/5: W-Score Computation ...
+     ↳ 📊 Saving : sub2_Visit_1/roi_wscores_all_atlas.csv
+
+  Step 4/5: Stage and Subtype Inference ...
+
+  Step 5/5: Survival Prediction ...
+     ↳ 📊 Saving : sub2_Visit_1/prognosis.png
+     ↳ 📊 Saving : sub2_Visit_1/predicted_survival_curve.csv
+
+   ✅ Successfully completed all steps for sub2.
+
+--- Starting Pipeline for Subject: sub3 Visit_1 ---
+
+  Step 1/5: DBM Generation ...
+     ↳ 📊 Saving : vbm/sub3_Visit_1_dbm.mnc
+
+  Step 2/5: ROI Extraction ...
+     ↳ 📊 Saving : sub3_Visit_1/roi_means_all_atlas.csv
+
+  Step 3/5: W-Score Computation ...
+     ↳ 📊 Saving : sub3_Visit_1/roi_wscores_all_atlas.csv
+
+  Step 4/5: Stage and Subtype Inference ...
+
+  Step 5/5: Survival Prediction ...
+     ↳ 📊 Saving : sub3_Visit_1/prognosis.png
+     ↳ 📊 Saving : sub3_Visit_1/predicted_survival_curve.csv
+
+   ✅ Successfully completed all steps for sub3.
+
+📊 Summary of inference and prediction found at: results_20260317/results_summary.csv
+
