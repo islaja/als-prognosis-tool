@@ -9,7 +9,7 @@ This repository follows a Dockerfile-based distribution, ensuring that the compu
 
 ## 📖 Scientific Basis
 
- Data include clinical and T1w images from CALSNIC, a large, prospectively acquired multicenter longitudinal ALS cohort ([Kalra et al., 2019](https://doi.org/10.1212/WNL.92.15_supplement.P1.4-010)).
+ Data include clinical and T1w images from CALSNIC, a large, prospectively acquired multicenter longitudinal ALS cohort ([Kalra et al., 2020](https://www.medrxiv.org/content/10.1101/2020.07.10.20142679v2)).
 
 The preprocessing pipeline, the control dataset used for normalization,
 and the trained SuStaIn model implemented in this tool are based on the
