@@ -12,6 +12,7 @@ description = "A clinical tool for ALS disease progression subtyping and surviva
 dependencies = [
     "numpy",
     "pandas",
+    "requests",
     "scikit-learn",
     "scikit-survival",
     "nibabel",
