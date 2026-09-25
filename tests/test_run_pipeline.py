@@ -10,6 +10,7 @@ Heavy external computations are monkeypatched to keep tests fast and determinist
 """
 
 from pathlib import Path
+import joblib
 import pandas as pd
 import yaml
 from als_prognosis.progression import predict
@@ -53,8 +54,18 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
         desc = yaml.safe_load(f)
     
     desc["models"]["sustain_model"]["model_id"] = "test_model"
-    desc["models"]["sustain_model"]["model_file"] = "models/dummy.pkl"
-    desc["models"]["sustain_model"]["model_meta_file"] = "models/dummy_meta.pkl"
+
+    # Create real placeholder files so the sustain step's `.exists()` checks pass.
+    # Their content is irrelevant: loading is monkeypatched below (load_pickle_info,
+    # infer_with_model), except the model file itself which is loaded for real via
+    # joblib.load(), so it must at least be a valid joblib file.
+    dummy_model_file = tmp_path / "dummy_sustain_model.joblib"
+    joblib.dump({"dummy": "model"}, dummy_model_file)
+    dummy_meta_file = tmp_path / "dummy_sustain_meta.pkl"
+    dummy_meta_file.write_bytes(b"fake meta content")
+
+    desc["models"]["sustain_model"]["model_file"] = str(dummy_model_file)
+    desc["models"]["sustain_model"]["model_meta_file"] = str(dummy_meta_file)
 
     # Restrict feature selection to a known test feature
     for step in desc["processing_chain"]:
@@ -132,25 +143,40 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
         }),
     )
 
+    # Feature names required by the sustain_inference step, pulled directly from
+    # the descriptor so the mock can't drift from what the real config expects.
+    sustain_regions = next(
+        step["regions_list"]
+        for step in desc["processing_chain"]
+        if step["step"] == "sustain_inference"
+    )
+
     monkeypatch.setattr(
         wscores,
         "compute_wscores",
-        lambda *args, **kwargs: pd.Series({
-            "roi_1_wscore": 0.123,
-            "roi_2_wscore": 0.456,
-            "roi_3_wscore": 0.789
-        }),
+        lambda *args, **kwargs: pd.Series({name: 0.5 for name in sustain_regions}),
+    )
+
+    monkeypatch.setattr(
+        predict,
+        "load_pickle_info",
+        lambda meta_file: (None, None),
     )
 
     monkeypatch.setattr(
         predict,
         "infer_with_model",
-        lambda ctx: {
-            **ctx,
-            "prediction": pd.Series({"subtype": "X"}),
-        },
+        lambda model, samples_sequence, samples_f, data: pd.Series({
+            "inferred_subtype": 2,
+            "prob_inferred_subtype": 0.976,
+            "inferred_stage": 13,
+            "prob_inferred_stage": 0.129,
+            "prob_s1": 0.021,
+            "prob_s2": 0.976,
+            "prob_s3": 0.003,
+        }),
     )
-    
+
     # ------------------------------------------------------------------
     # Act
     # ------------------------------------------------------------------
@@ -172,10 +198,18 @@ def test_run_pipeline_steps_monkeypatched(tmp_path, monkeypatch):
     # ------------------------------------------------------------------
     # Assert
     # ------------------------------------------------------------------
-    if result is not None:
-        assert result["id"] == "S01"
-        assert result["visit"] == "V1"
-        assert result["model_id"] == "test_model"
+    assert result is not None, "Pipeline returned None; check pipeline.log for the failing step"
+    assert result["ID"] == "S01"
+    assert result["Visit"] == "V1"
+    assert result["model_id"] == "test_model"
 
-        expected_pred = pd.Series({"subtype": "X"})
-        pd.testing.assert_series_equal(result["sustain_prediction"], expected_pred)
+    expected_sustain_inference = {
+        "inferred_subtype": 2.0,
+        "prob_inferred_subtype": 0.976,
+        "inferred_stage": 13.0,
+        "prob_inferred_stage": 0.129,
+        "prob_s1": 0.021,
+        "prob_s2": 0.976,
+        "prob_s3": 0.003,
+    }
+    assert result["sustain_inference"] == expected_sustain_inference
