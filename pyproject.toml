@@ -10,17 +10,22 @@ authors = [
 ]
 description = "A clinical tool for ALS disease progression subtyping and survival prognosis."
 dependencies = [
-    "numpy",
-    "pandas",
-    "scikit-learn",
-    "scikit-survival",
-    "nibabel",
-    "joblib",
+    "numpy==1.26.4",
+    "pandas==2.2.2",
+    "scikit-learn==1.5.2",
+    "scikit-survival==0.23.1",
+    "statsmodels==0.14.6",
+    "nibabel==5.2.1",
+    "joblib==1.5.3",
+    "dill==0.3.5.1",
+    "requests",
     "PyYAML",
     "seaborn",
-    "statsmodels",
-    "tqdm"
+    "tqdm",
 ]
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["."]
