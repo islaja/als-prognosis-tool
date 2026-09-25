@@ -25,3 +25,15 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -v
+
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t als-prognosis:ci .
+
+      - name: Smoke test container
+        run: docker run --rm als-prognosis:ci --help
