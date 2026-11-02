@@ -280,6 +280,16 @@ GitHub Actions (`.github/workflows/tests.yml`) runs on every push and pull reque
 
 ------------------------------------------------------------------------
 
+## 🤖 AI-Assisted Development
+
+AI coding assistants, including Claude Code and ChatGPT, were used during
+development for code generation, debugging, and documentation.
+
+All AI-assisted contributions were reviewed and integrated as part of the
+project's development process.
+
+------------------------------------------------------------------------
+
 ## 📜 License
 
 This project is licensed under the MIT License.
