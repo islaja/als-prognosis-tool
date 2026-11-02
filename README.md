@@ -263,11 +263,20 @@ This project uses `pytest` to validate the core neuroimaging pipeline, prioritiz
 ### Key Validations
 * **ROI Integrity:** Integration tests verify atlas mapping on real DBM data to ensure zero `NaN` values.
 * **Pipeline Orchestration:** Employs **monkeypatching** to validate complex logic (Pelican, w-scoring, SuStaIn) without heavy external dependencies.
+* **W-Score Computation:** Unit tests validate deviation-from-normative scoring, scanner defaulting, and ROI-skipping logic using lightweight fake regression models.
+* **SuStaIn Subtype/Stage Inference:** Unit tests validate post-processing of raw model output — 0-based to 1-based subtype re-indexing, stage-0 handling, and `prob_sN` column construction — using a fake SuStaIn model.
+* **Survival Prediction:** Unit tests validate bootstrap curve ensembling (mean, 2.5th/97.5th percentile bounds, median survival time via interpolation) using fake Coxnet models with hand-computed expected values.
+* **Progression Rate:** Unit tests validate the DPR formula, preservation of existing values, and handling of zero/missing symptom duration.
 * **Config Parsing:** Ensures model descriptors and resource YAMLs are correctly interpreted across processing steps.
 
+### Continuous Integration
+GitHub Actions (`.github/workflows/tests.yml`) runs on every push and pull request, with two parallel jobs:
+* **`test`:** Installs the package (`.[test]`) and runs the full `pytest` suite.
+* **`docker`:** Builds the Docker image and runs a lightweight `--help` smoke test against the container to confirm the `main_env` environment and CLI entrypoint start correctly, without requiring real model artifacts or input data.
+
 ### Status
-* **Current:** Core preprocessing and subtyping orchestration tests are **passing**.
-* **Roadmap:** Survival prognosis module coverage is planned; the modular architecture allows for easy extension using existing mock patterns.
+* **Current:** Preprocessing, subtyping, survival prognosis, and pipeline orchestration all have targeted unit/integration coverage and are **passing**, with both jobs enforced in CI.
+* **Roadmap:** Failure-path coverage (malformed inputs, missing files) and CI coverage of the full `run` pipeline inside the container are planned next.
 
 ------------------------------------------------------------------------
 
